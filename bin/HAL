@@ -196,12 +196,14 @@ do_notes() {
   case "$topic" in
     tablets)  pack_tablets ;;
     dotfiles) _notes_dotfiles ;;
+    stack)    _notes_stack ;;
     *)
       echo "HAL notes <topic>"
       echo ""
       echo "Available topics:"
       echo "  tablets   — tablet IPs, bootstrap sequence, Xpra, Ansible, roles"
       echo "  dotfiles  — which dotfile repo is authoritative for which device"
+      echo "  stack     — full device stack: what runs on P14s WSL2 vs tablets"
       ;;
   esac
 }
@@ -238,6 +240,62 @@ _notes_dotfiles() {
   ~/.bash_profile            → ~/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile
 
 DOTFILES
+}
+
+_notes_stack() {
+  section "NOTES: stack — device stack overview"
+  cat <<'STACK'
+## Device stack (as of 2026-05-31)
+
+### P14s (Lenovo ThinkPad P14s — primary machine)
+  OS:      Windows 11
+  WSL2:    Arch Linux + XFCE4 + i3 + picom + conky
+  Dotfiles: U.Dot (i3, picom, bash)
+  Key apps (Windows):
+    Ableton Live Suite  — audio engine
+    Bome MIDI Translator Pro  — MIDI routing (Twisters → virtual port)
+    Bitfocus Companion  — Stream Deck XL control
+    InputLeap server    — keyboard/mouse sharing SERVER (shares P14s kbd+mouse)
+    VcXsrv              — X server for WSL2 display
+    AutoHotKey          — key remapping (¦→|, knob→WSL2 bridge)
+  Key apps (WSL2 Arch):
+    Python field server  — soma-field instrument core
+    xpra                 — display teleportation (start sessions here)
+    InputLeap client     — receives kbd/mouse from server when needed
+
+### 3× Lenovo IdeaPad Tablets
+  OS:      Android + Termux
+  Layer:   PRoot → Arch Linux + XFCE4 + xpra + picom + conky
+  Dotfiles: U.Dot (via Ansible symlinks)
+  IPs:     .207 (u0_a304) | .219 (u0_a360) | .110 (u0_a297)
+  Key apps:
+    Termux-X11       — display server (preferred over VNC — no compression)
+    xpra client      — attach to sessions running on P14s WSL2
+    InputLeap client — shares P14s keyboard/mouse onto tablet screen
+    Python/OSC       — receives field state from server
+
+### Keyboard/mouse sharing: InputLeap
+  Consensus across multiple chat sessions: InputLeap is the current
+  active maintained project (Synergy → Barrier → InputLeap lineage).
+  Server: P14s Windows (shares the physical Keychron + trackball)
+  Clients: WSL2 Arch + all 3 tablets (Termux PRoot Arch)
+  Mouse slides off screen edge → control moves to next device.
+  Shared clipboard included.
+  Install: https://github.com/input-leap/input-leap
+
+### Display teleportation: Xpra
+  Start a session on P14s WSL2, view/interact from any tablet.
+  App runs on P14s CPU; only the pixels travel over LAN.
+  See: HAL notes tablets
+
+### Soma-field instrument roles per device
+  P14s (Windows):  Ableton Live + Bome + Companion
+  P14s (WSL2):     Python field server — the physics brain
+  Tablet 1:        OSC monitor / field state display
+  Tablet 2:        Extended Stream Deck (Companion remote panel)
+  Tablet 3:        TouchDesigner preview / fractal mirror
+
+STACK
 }
 
 # ---------------------------------------------------------------------------
@@ -293,6 +351,7 @@ Usage:
   HAL notes <topic>      Quick reference for a topic (no AI context — just the facts)
                            tablets   — tablet bootstrap sequence, Xpra, IPs, roles
                            dotfiles  — which repo is authoritative for which device
+                           stack     — full device stack: WSL2 vs tablets, InputLeap, Xpra
   HAL sync               Pull --ff-only on all known repos (pull-first discipline)
   HAL init               Symlink HAL into ~/.local/bin/HAL
   HAL help               Show this help
