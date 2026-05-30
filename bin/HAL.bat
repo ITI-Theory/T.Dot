@@ -90,18 +90,18 @@ exit /b 0
 
 :pack_lean
 echo.
-echo --- PACK: lean - U/src Lean 4 source files ---
+echo --- PACK: lean - U/paper/proofs Lean 4 source files ---
 powershell -NoProfile -Command ^
-  "Get-ChildItem '%ITI%\U\src\*.lean' -Recurse | Sort-Object FullName | ForEach-Object { Write-Output ('### FILE: ' + $_.FullName + ' ###'); Get-Content $_.FullName }"
+  "Get-ChildItem '%ITI%\U\paper\proofs\*.lean' -Recurse | Sort-Object FullName | ForEach-Object { Write-Output ('### FILE: ' + $_.FullName + ' ###'); Get-Content $_.FullName }"
 exit /b 0
 
 :pack_process
 echo.
-echo --- PACK: process - U/PROCESS_PROCEDURES.md ---
-if exist "%ITI%\U\PROCESS_PROCEDURES.md" (
-  type "%ITI%\U\PROCESS_PROCEDURES.md"
+echo --- PACK: process - U/PROCESS.md ---
+if exist "%ITI%\U\PROCESS.md" (
+  type "%ITI%\U\PROCESS.md"
 ) else (
-  echo [HAL] WARNING: PROCESS_PROCEDURES.md not found
+  echo [HAL] WARNING: PROCESS.md not found
 )
 exit /b 0
 

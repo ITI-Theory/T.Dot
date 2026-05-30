@@ -89,10 +89,10 @@ pack_papers() {
 }
 
 pack_lean() {
-  section "PACK: lean — U/src Lean 4 source files"
-  local src_dir="$ITI/U/src"
+  section "PACK: lean — U/paper/proofs Lean 4 source files"
+  local src_dir="$ITI/U/paper/proofs"
   if [[ ! -d "$src_dir" ]]; then
-    echo "[HAL] WARNING: src dir not found at $src_dir"; return
+    echo "[HAL] WARNING: proofs dir not found at $src_dir"; return
   fi
   while IFS= read -r -d '' f; do
     echo ""
@@ -102,11 +102,11 @@ pack_lean() {
 }
 
 pack_process() {
-  section "PACK: process — U/PROCESS_PROCEDURES.md"
-  if [[ -f "$ITI/U/PROCESS_PROCEDURES.md" ]]; then
-    cat "$ITI/U/PROCESS_PROCEDURES.md"
+  section "PACK: process — U/PROCESS.md"
+  if [[ -f "$ITI/U/PROCESS.md" ]]; then
+    cat "$ITI/U/PROCESS.md"
   else
-    echo "[HAL] WARNING: PROCESS_PROCEDURES.md not found"
+    echo "[HAL] WARNING: PROCESS.md not found"
   fi
 }
 
@@ -140,8 +140,8 @@ Usage:
                            HAL prime | termux-clipboard-set    (Termux)
                          Optional packs (add after prime):
                            papers   — all U paper source .md files
-                           lean     — all U/src .lean proof files
-                           process  — U/PROCESS_PROCEDURES.md in full
+                           lean     — all U/paper/proofs .lean proof files
+                           process  — U/PROCESS.md in full
                            issues   — open GitHub issues across T.Ops, U, U.Ops
                          Combine: HAL prime papers lean
   HAL init               Symlink HAL into ~/.local/bin/HAL
