@@ -110,6 +110,68 @@ pack_process() {
   fi
 }
 
+pack_tablets() {
+  section "PACK: tablets — Tablet bootstrap & Xpra reference"
+  cat <<'TABLETS'
+## Tablet Setup Reference (3× Lenovo IdeaPad, Android/Termux)
+
+### IPs and users (LAN 192.168.1.x)
+  Tablet 1:  u0_a304 @ 10.205.183.207  port 8022
+  Tablet 2:  u0_a360 @ 10.205.183.219  port 8022
+  Tablet 3:  u0_a297 @ 10.205.183.110  port 8022
+
+### Bootstrap sequence — do this in order
+
+  Step 1 (on each tablet, manually):
+    pkg install openssh && sshd
+    whoami          # note your u0_aNNN username
+    ifconfig wlan0  # confirm IP
+
+  Step 2 (from P14s WSL2 — once per tablet):
+    ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519   # if not already done
+    ssh-copy-id -p 8022 u0_a304@10.205.183.207
+    ssh-copy-id -p 8022 u0_a360@10.205.183.219
+    ssh-copy-id -p 8022 u0_a297@10.205.183.110
+
+  Step 3 (from P14s WSL2 — automation):
+    ansible-playbook T.Dot/provisioning/tablets/site.yml
+    # Installs: PRoot, Arch, XFCE4, Xpra, clones dotfiles
+
+  Step 4 (optional — InputLeap):
+    InputLeap server on P14s (Windows binary)
+    InputLeap client inside each tablet's PRoot Arch
+
+### Xpra — "screen for X11" (the display-teleport app)
+  What it does: run an app on machine A, view/interact with it on machine B.
+  The app keeps running on A's CPU — only the display moves.
+
+  Start a session on source machine (Arch notebook or P14s WSL2):
+    xpra start :100 --start-child=xfce4-session
+
+  Attach from a tablet (inside PRoot Arch):
+    xpra attach xpra:192.168.1.NNN:100
+
+  Teleport back:
+    detach (close the xpra window on tablet) → re-attach from source
+
+  Install:
+    sudo pacman -S xpra        # Arch
+    sudo apt install xpra      # Ubuntu/Debian (inside PRoot)
+
+### Tablet roles (soma-field instrument)
+  Tablet 1:  OSC monitor / field state display (Xpra → Python server output)
+  Tablet 2:  Extended Stream Deck surface (Bitfocus Companion remote panel)
+  Tablet 3:  TouchDesigner preview / fractal output mirror
+
+### Why Ansible (not manual):
+  Three tablets, identical setup. Do it once in a playbook, replay on all three.
+  Ansible needs SSH key auth first (Step 2 above) — it cannot bootstrap Termux itself.
+  Playbook lives at: T.Dot/provisioning/tablets/site.yml
+  Inventory at:      T.Dot/provisioning/tablets/hosts
+
+TABLETS
+}
+
 pack_issues() {
   section "PACK: issues — open GitHub issues (requires gh CLI)"
   if ! command -v gh &>/dev/null; then
@@ -123,6 +185,23 @@ pack_issues() {
       --template '{{range .}}#{{.number}} {{.title}} [{{range .labels}}{{.name}} {{end}}] ({{.updatedAt | timeago}}){{"\n"}}{{end}}' \
       2>/dev/null || echo "[no issues or access error]"
   done
+}
+
+# ---------------------------------------------------------------------------
+# HAL notes — quick human-readable reference for a topic
+# ---------------------------------------------------------------------------
+
+do_notes() {
+  local topic="${1:-}"
+  case "$topic" in
+    tablets) pack_tablets ;;
+    *)
+      echo "HAL notes <topic>"
+      echo ""
+      echo "Available topics:"
+      echo "  tablets   — tablet IPs, bootstrap sequence, Xpra, Ansible, roles"
+      ;;
+  esac
 }
 
 # ---------------------------------------------------------------------------
@@ -173,7 +252,10 @@ Usage:
                            lean     — all U/paper/proofs .lean proof files
                            process  — U/PROCESS.md in full
                            issues   — open GitHub issues across T.Ops, U, U.Ops
+                           tablets  — tablet IPs, bootstrap, Xpra, Ansible reference
                          Combine: HAL prime papers lean
+  HAL notes <topic>      Quick reference for a topic (no AI context — just the facts)
+                           tablets  — tablet bootstrap sequence, Xpra, IPs, roles
   HAL sync               Pull --ff-only on all known repos (pull-first discipline)
   HAL init               Symlink HAL into ~/.local/bin/HAL
   HAL help               Show this help
@@ -214,7 +296,8 @@ case "$cmd" in
           lean)    pack_lean    ;;
           process) pack_process ;;
           issues)  pack_issues  ;;
-          *)       echo "[HAL] Unknown pack: $pack (available: papers lean process issues)" ;;
+          tablets) pack_tablets ;;
+          *)       echo "[HAL] Unknown pack: $pack (available: papers lean process issues tablets)" ;;
         esac
       done
       echo ""
@@ -230,6 +313,7 @@ case "$cmd" in
     ;;
   init)  do_init ;;
   sync)  do_sync ;;
+  notes) do_notes "${1:-}" ;;
   help|-h|--help) usage ;;
   *)
     echo "[HAL] Unknown command: $cmd" >&2
