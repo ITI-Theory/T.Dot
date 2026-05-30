@@ -1,0 +1,3 @@
+* text=auto
+bin/HAL text eol=lf
+bin/HAL.bat text eol=crlf
