@@ -145,7 +145,7 @@ pack_tablets() {
   What it does: run an app on machine A, view/interact with it on machine B.
   The app keeps running on A's CPU — only the display moves.
 
-  Start a session on source machine (Arch notebook or P14s WSL2):
+  Start a session on source machine (P14s WSL2 — Arch):
     xpra start :100 --start-child=xfce4-session
 
   Attach from a tablet (inside PRoot Arch):
@@ -212,8 +212,7 @@ _notes_dotfiles() {
 ## Dotfile repo lane assignments (decided 2026-05-31)
 
   U.Dot (ITI-Theory/U.Dot)   — AUTHORITATIVE for all U-lane machines:
-                                  - P14s WSL2 (Ubuntu + XFCE4)
-                                  - Arch notebook (bare metal)
+                                  - P14s WSL2 (Arch + XFCE4)  ← only notebook
                                   - Tablets (PRoot Arch, via Ansible)
                                 Contains: i3/config, picom/picom.conf,
                                           bash/{MINGW64,ubuntu}/, bin/HAL (shim),
@@ -229,9 +228,10 @@ _notes_dotfiles() {
                                 Do NOT use for provisioning. Can be deleted.
 
 ## Provisioning path
-  New device → T.Dot clone → HAL init → HAL sync → U.Dot clone → symlinks
+  P14s WSL2:  clone T.Dot → HAL init → HAL sync → U.Dot clone → symlinks
+  Tablets:    ansible-playbook T.Dot/provisioning/tablets/site.yml (does all of above)
 
-## Symlink targets (inside Arch or WSL2)
+## Symlink targets (inside WSL2 Arch or tablet PRoot Arch)
   ~/.config/i3/config       → ~/prj/git/ITI-Theory/U.Dot/i3/config
   ~/.config/picom/picom.conf → ~/prj/git/ITI-Theory/U.Dot/picom/picom.conf
   ~/.bashrc                  → ~/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc
