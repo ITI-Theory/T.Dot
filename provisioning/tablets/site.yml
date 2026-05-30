@@ -1,0 +1,127 @@
+---
+# Tablet provisioning playbook
+# Targets: 3× Lenovo IdeaPad tablets running Termux (Android)
+# Controller: P14s WSL2 (Ubuntu)
+#
+# Prerequisites (manual, ~2 commands per tablet):
+#   On each tablet:  pkg install openssh && sshd
+#   On P14s WSL2:    ssh-copy-id -p 8022 u0_aNNN@10.205.183.NNN
+#
+# Run:
+#   ansible-playbook -i hosts site.yml
+#   ansible-playbook -i hosts site.yml --tags xpra   # xpra only
+
+- name: Tablet bootstrap — Termux layer
+  hosts: tablets
+  gather_facts: false
+
+  tasks:
+
+    - name: Ping check
+      ansible.builtin.ping:
+
+    - name: Update Termux package index
+      ansible.builtin.command: pkg update -y
+      changed_when: false
+
+    - name: Install Termux core packages
+      ansible.builtin.command: >
+        pkg install -y
+        proot-distro
+        openssh
+        python
+        git
+      changed_when: false
+
+    - name: Check if Arch already installed via proot-distro
+      ansible.builtin.command: proot-distro list
+      register: proot_list
+      changed_when: false
+
+    - name: Install Arch Linux via proot-distro
+      ansible.builtin.command: proot-distro install archlinux
+      when: "'archlinux' not in proot_list.stdout"
+
+    - name: Clone U.Dot dotfiles (Termux home)
+      ansible.builtin.git:
+        repo: https://github.com/ITI-Theory/U.Dot.git
+        dest: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot"
+        update: true
+      tags: dotfiles
+
+    - name: Clone T.Dot (HAL)
+      ansible.builtin.git:
+        repo: https://github.com/ITI-Theory/T.Dot.git
+        dest: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot"
+        update: true
+      tags: dotfiles
+
+    - name: Symlink HAL into Termux PATH
+      ansible.builtin.file:
+        src: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL"
+        dest: "{{ ansible_env.HOME }}/.local/bin/HAL"
+        state: link
+        force: true
+      tags: dotfiles
+
+- name: Arch (PRoot) layer — packages + Xpra + dotlinks
+  hosts: tablets
+  gather_facts: false
+
+  vars:
+    # Commands run inside the Arch PRoot container
+    arch: "proot-distro login archlinux --"
+
+  tasks:
+
+    - name: Pacman — update and install desktop + Xpra stack
+      ansible.builtin.command: >
+        {{ arch }} bash -c "
+          pacman -Syu --noconfirm &&
+          pacman -S --noconfirm --needed
+            xorg-server
+            xfce4
+            xfce4-terminal
+            xpra
+            picom
+            conky
+            ttf-dejavu
+            ttf-liberation
+            openssh
+            git
+            python
+            python-pip
+        "
+      changed_when: false
+      tags: arch_packages
+
+    - name: Link i3 config from U.Dot into Arch home
+      ansible.builtin.command: >
+        {{ arch }} bash -c "
+          mkdir -p /root/.config/i3 /root/.config/picom &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/i3/config /root/.config/i3/config &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf
+        "
+      changed_when: false
+      tags: dotfiles
+
+    - name: Link bash profile from U.Dot into Arch home
+      ansible.builtin.command: >
+        {{ arch }} bash -c "
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile
+        "
+      changed_when: false
+      tags: dotfiles
+
+    - name: Verify Xpra is available inside Arch
+      ansible.builtin.command: >
+        {{ arch }} bash -c "xpra --version"
+      register: xpra_ver
+      changed_when: false
+      tags: xpra
+
+    - name: Show Xpra version
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ xpra_ver.stdout }}"
+      tags: xpra

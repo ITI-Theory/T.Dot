@@ -194,14 +194,50 @@ pack_issues() {
 do_notes() {
   local topic="${1:-}"
   case "$topic" in
-    tablets) pack_tablets ;;
+    tablets)  pack_tablets ;;
+    dotfiles) _notes_dotfiles ;;
     *)
       echo "HAL notes <topic>"
       echo ""
       echo "Available topics:"
       echo "  tablets   — tablet IPs, bootstrap sequence, Xpra, Ansible, roles"
+      echo "  dotfiles  — which dotfile repo is authoritative for which device"
       ;;
   esac
+}
+
+_notes_dotfiles() {
+  section "NOTES: dotfiles — lane assignments"
+  cat <<'DOTFILES'
+## Dotfile repo lane assignments (decided 2026-05-31)
+
+  U.Dot (ITI-Theory/U.Dot)   — AUTHORITATIVE for all U-lane machines:
+                                  - P14s WSL2 (Ubuntu + XFCE4)
+                                  - Arch notebook (bare metal)
+                                  - Tablets (PRoot Arch, via Ansible)
+                                Contains: i3/config, picom/picom.conf,
+                                          bash/{MINGW64,ubuntu}/, bin/HAL (shim),
+                                          boot-desktop.sh, init-desktop.sh
+
+  T.Dot (ITI-Theory/T.Dot)   — HAL master router + cross-device bootstrap
+                                Contains: bin/HAL (master), .gitattributes,
+                                          provisioning/tablets/
+
+  Me/Dot (Alistair-Johnson/Me/Dot)
+                              — STAGING ONLY. i3/config + picom.conf created
+                                May 13 2026 but identical to U.Dot defaults.
+                                Do NOT use for provisioning. Can be deleted.
+
+## Provisioning path
+  New device → T.Dot clone → HAL init → HAL sync → U.Dot clone → symlinks
+
+## Symlink targets (inside Arch or WSL2)
+  ~/.config/i3/config       → ~/prj/git/ITI-Theory/U.Dot/i3/config
+  ~/.config/picom/picom.conf → ~/prj/git/ITI-Theory/U.Dot/picom/picom.conf
+  ~/.bashrc                  → ~/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc
+  ~/.bash_profile            → ~/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile
+
+DOTFILES
 }
 
 # ---------------------------------------------------------------------------
@@ -255,7 +291,8 @@ Usage:
                            tablets  — tablet IPs, bootstrap, Xpra, Ansible reference
                          Combine: HAL prime papers lean
   HAL notes <topic>      Quick reference for a topic (no AI context — just the facts)
-                           tablets  — tablet bootstrap sequence, Xpra, IPs, roles
+                           tablets   — tablet bootstrap sequence, Xpra, IPs, roles
+                           dotfiles  — which repo is authoritative for which device
   HAL sync               Pull --ff-only on all known repos (pull-first discipline)
   HAL init               Symlink HAL into ~/.local/bin/HAL
   HAL help               Show this help
