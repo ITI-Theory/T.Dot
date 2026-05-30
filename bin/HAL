@@ -164,10 +164,8 @@ usage() {
 HAL Level Zero
 
 Usage:
-  HAL prime [pack ...]   Output AI context block. Pipe to clipboard:
-                           HAL prime | clip                    (Windows Git Bash)
-                           HAL prime | xclip                   (Linux)
-                           HAL prime | termux-clipboard-set    (Termux)
+  HAL prime [pack ...]   Output AI context block and auto-copy to clipboard.
+                         Platform auto-detected: xclip / wl-copy / clip / termux-clipboard-set
                          Optional packs (add after prime):
                            papers   — all U paper source .md files
                            lean     — all U/paper/proofs .lean proof files
@@ -186,19 +184,33 @@ shift || true
 
 case "$cmd" in
   prime)
-    do_prime
-    # Load any packs named as additional arguments
-    for pack in "$@"; do
-      case "$pack" in
-        papers)  pack_papers  ;;
-        lean)    pack_lean    ;;
-        process) pack_process ;;
-        issues)  pack_issues  ;;
-        *)       echo "[HAL] Unknown pack: $pack (available: papers lean process issues)" ;;
-      esac
-    done
-    echo ""
-    banner "END HAL prime — paste above into any AI session"
+    _hal_clip() {
+      if [[ -n "${TERMUX_VERSION:-}" ]] || command -v termux-clipboard-set &>/dev/null; then
+        termux-clipboard-set
+      elif [[ -n "${WAYLAND_DISPLAY:-}" ]] && command -v wl-copy &>/dev/null; then
+        wl-copy
+      elif command -v xclip &>/dev/null; then
+        xclip -selection clipboard
+      else
+        clip 2>/dev/null || { cat > /dev/null; echo "[HAL] No clipboard tool found — install xclip (X11) or wl-copy (Wayland)" >&2; }
+      fi
+    }
+    {
+      do_prime
+      for pack in "$@"; do
+        case "$pack" in
+          papers)  pack_papers  ;;
+          lean)    pack_lean    ;;
+          process) pack_process ;;
+          issues)  pack_issues  ;;
+          *)       echo "[HAL] Unknown pack: $pack (available: papers lean process issues)" ;;
+        esac
+      done
+      echo ""
+      banner "END HAL prime — paste above into any AI session"
+    } | tee >(_hal_clip)
+    echo "" >&2
+    echo "[HAL] Copied to clipboard." >&2
     ;;
   init)  do_init ;;
   sync)  do_sync ;;
