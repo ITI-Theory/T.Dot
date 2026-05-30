@@ -85,7 +85,7 @@ exit /b 0
 echo.
 echo --- PACK: papers - U paper source files ---
 powershell -NoProfile -Command ^
-  "Get-ChildItem '%ITI%\U\paper\*.md' | Where-Object { $_.Name -cmatch '^[a-z]' } | Sort-Object Name | ForEach-Object { Write-Output ('### FILE: ' + $_.FullName + ' ###'); Get-Content $_.FullName }"
+  "Get-ChildItem '%ITI%\U\paper\soma' -Recurse -Filter '*.md' -Depth 2 | Where-Object { -not $_.PSIsContainer } | Sort-Object FullName | ForEach-Object { Write-Output ('### FILE: ' + $_.FullName + ' ###'); Get-Content $_.FullName }"
 exit /b 0
 
 :pack_lean

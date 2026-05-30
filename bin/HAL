@@ -80,16 +80,12 @@ pack_papers() {
   if [[ ! -d "$paper_dir" ]]; then
     echo "[HAL] WARNING: paper dir not found at $paper_dir"; return
   fi
-  # Include lowercase-named .md files (papers) — exclude ALL-CAPS support files
+  # Each paper lives in paper/soma/<name>/<name>.md (or ai-method/<name>/<name>.md)
   while IFS= read -r -d '' f; do
-    local base
-    base="$(basename "$f")"
-    # Skip files that start with an uppercase letter (FIELD-NOTES, PAPER_STATUS, etc.)
-    [[ "$base" =~ ^[A-Z] ]] && continue
     echo ""
     echo "### FILE: $f ###"
     cat "$f"
-  done < <(find "$paper_dir" -maxdepth 1 -name "*.md" -print0 | sort -z)
+  done < <(find "$paper_dir/soma" "$paper_dir/ai-method" -mindepth 2 -maxdepth 2 -name "*.md" -print0 2>/dev/null | sort -z)
 }
 
 pack_lean() {
