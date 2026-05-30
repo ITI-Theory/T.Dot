@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+# T.Dot lives inside ITI-Theory/ — sibling repos are one level up
+ITI="$(cd -- "$REPO_ROOT/.." && pwd)"
+ME_REPO="$(cd -- "$ITI/../Me" 2>/dev/null && pwd)" || ME_REPO="$HOME/prj/git/Me"
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+
+section() { echo ""; echo "--- $* ---"; }
+banner()  { echo "================================================================"; echo "=== $*"; echo "================================================================"; }
+
+# ---------------------------------------------------------------------------
+# HAL init — symlink HAL into PATH
+# ---------------------------------------------------------------------------
+
+do_init() {
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$SCRIPT_DIR/HAL" "$HOME/.local/bin/HAL"
+  echo "[HAL] init complete — HAL linked to ~/.local/bin/HAL"
+  echo "[HAL] Ensure ~/.local/bin is in PATH (add to ~/.bashrc if needed)"
+}
+
+# ---------------------------------------------------------------------------
+# HAL prime — base context block
+# ---------------------------------------------------------------------------
+
+do_prime() {
+  banner "HAL prime — $(date '+%Y-%m-%d %H:%M')"
+
+  section "MASTER INSTRUCTIONS (T/.github/copilot-instructions.md)"
+  if [[ -f "$ITI/T/.github/copilot-instructions.md" ]]; then
+    cat "$ITI/T/.github/copilot-instructions.md"
+  else
+    echo "[HAL] WARNING: T master instructions not found"
+  fi
+
+  section "U INSTRUCTIONS (U/.github/copilot-instructions.md)"
+  if [[ -f "$ITI/U/.github/copilot-instructions.md" ]]; then
+    cat "$ITI/U/.github/copilot-instructions.md"
+  else
+    echo "[HAL] WARNING: U instructions not found"
+  fi
+
+  section "FIELD-NOTES (last 40 lines)"
+  if [[ -f "$ITI/U/paper/FIELD-NOTES.md" ]]; then
+    tail -40 "$ITI/U/paper/FIELD-NOTES.md"
+  else
+    echo "[HAL] WARNING: FIELD-NOTES.md not found"
+  fi
+
+  section "GIT STATUS"
+  for repo in U T.Ops Me; do
+    local rpath
+    if [[ "$repo" == "Me" ]]; then
+      rpath="$ME_REPO"
+    else
+      rpath="$ITI/$repo"
+    fi
+    echo "=== $repo ==="
+    if [[ -d "$rpath/.git" ]]; then
+      git -C "$rpath" status -sb
+    else
+      echo "[not found at $rpath]"
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------
+# Packs — loaded on top of base prime
+# ---------------------------------------------------------------------------
+
+pack_papers() {
+  section "PACK: papers — U paper source files"
+  local paper_dir="$ITI/U/paper"
+  if [[ ! -d "$paper_dir" ]]; then
+    echo "[HAL] WARNING: paper dir not found at $paper_dir"; return
+  fi
+  # Include lowercase-named .md files (papers) — exclude ALL-CAPS support files
+  while IFS= read -r -d '' f; do
+    local base
+    base="$(basename "$f")"
+    # Skip files that start with an uppercase letter (FIELD-NOTES, PAPER_STATUS, etc.)
+    [[ "$base" =~ ^[A-Z] ]] && continue
+    echo ""
+    echo "### FILE: $f ###"
+    cat "$f"
+  done < <(find "$paper_dir" -maxdepth 1 -name "*.md" -print0 | sort -z)
+}
+
+pack_lean() {
+  section "PACK: lean — U/src Lean 4 source files"
+  local src_dir="$ITI/U/src"
+  if [[ ! -d "$src_dir" ]]; then
+    echo "[HAL] WARNING: src dir not found at $src_dir"; return
+  fi
+  while IFS= read -r -d '' f; do
+    echo ""
+    echo "### FILE: $f ###"
+    cat "$f"
+  done < <(find "$src_dir" -name "*.lean" -print0 | sort -z)
+}
+
+pack_process() {
+  section "PACK: process — U/PROCESS_PROCEDURES.md"
+  if [[ -f "$ITI/U/PROCESS_PROCEDURES.md" ]]; then
+    cat "$ITI/U/PROCESS_PROCEDURES.md"
+  else
+    echo "[HAL] WARNING: PROCESS_PROCEDURES.md not found"
+  fi
+}
+
+pack_issues() {
+  section "PACK: issues — open GitHub issues (requires gh CLI)"
+  if ! command -v gh &>/dev/null; then
+    echo "[HAL] WARNING: gh CLI not found — install from https://cli.github.com"; return
+  fi
+  for repo in ITI-Theory/T.Ops ITI-Theory/U ITI-Theory/U.Ops; do
+    echo ""
+    echo "=== $repo ==="
+    gh issue list --repo "$repo" --state open --limit 50 \
+      --json number,title,labels,updatedAt \
+      --template '{{range .}}#{{.number}} {{.title}} [{{range .labels}}{{.name}} {{end}}] ({{.updatedAt | timeago}}){{"\n"}}{{end}}' \
+      2>/dev/null || echo "[no issues or access error]"
+  done
+}
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+
+usage() {
+  cat <<'USAGE'
+HAL Level Zero
+
+Usage:
+  HAL prime [pack ...]   Output AI context block. Pipe to clipboard:
+                           HAL prime | clip                    (Windows Git Bash)
+                           HAL prime | xclip                   (Linux)
+                           HAL prime | termux-clipboard-set    (Termux)
+                         Optional packs (add after prime):
+                           papers   — all U paper source .md files
+                           lean     — all U/src .lean proof files
+                           process  — U/PROCESS_PROCEDURES.md in full
+                           issues   — open GitHub issues across T.Ops, U, U.Ops
+                         Combine: HAL prime papers lean
+  HAL init               Symlink HAL into ~/.local/bin/HAL
+  HAL help               Show this help
+
+USAGE
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  prime)
+    do_prime
+    # Load any packs named as additional arguments
+    for pack in "$@"; do
+      case "$pack" in
+        papers)  pack_papers  ;;
+        lean)    pack_lean    ;;
+        process) pack_process ;;
+        issues)  pack_issues  ;;
+        *)       echo "[HAL] Unknown pack: $pack (available: papers lean process issues)" ;;
+      esac
+    done
+    echo ""
+    banner "END HAL prime — paste above into any AI session"
+    ;;
+  init)  do_init ;;
+  help|-h|--help) usage ;;
+  *)
+    echo "[HAL] Unknown command: $cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
