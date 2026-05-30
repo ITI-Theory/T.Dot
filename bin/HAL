@@ -164,8 +164,10 @@ usage() {
 HAL Level Zero
 
 Usage:
-  HAL prime [pack ...]   Output AI context block and auto-copy to clipboard.
-                         Platform auto-detected: xclip / wl-copy / clip / termux-clipboard-set
+  HAL prime [pack ...] [-c|--clip]
+                         Output AI context block to stdout.
+                         Add -c or --clip to also copy to clipboard
+                         (auto-detects: xclip / wl-copy / clip / termux-clipboard-set)
                          Optional packs (add after prime):
                            papers   — all U paper source .md files
                            lean     — all U/paper/proofs .lean proof files
@@ -195,9 +197,18 @@ case "$cmd" in
         clip 2>/dev/null || { cat > /dev/null; echo "[HAL] No clipboard tool found — install xclip (X11) or wl-copy (Wayland)" >&2; }
       fi
     }
-    {
+    # Check for --clip / -c flag anywhere in args
+    do_clip=0
+    packs=()
+    for arg in "$@"; do
+      case "$arg" in
+        --clip|-c) do_clip=1 ;;
+        *) packs+=("$arg") ;;
+      esac
+    done
+    _run_prime() {
       do_prime
-      for pack in "$@"; do
+      for pack in "${packs[@]+"${packs[@]}"}"; do
         case "$pack" in
           papers)  pack_papers  ;;
           lean)    pack_lean    ;;
@@ -208,9 +219,14 @@ case "$cmd" in
       done
       echo ""
       banner "END HAL prime — paste above into any AI session"
-    } | tee >(_hal_clip)
-    echo "" >&2
-    echo "[HAL] Copied to clipboard." >&2
+    }
+    if (( do_clip )); then
+      _run_prime | tee >(_hal_clip)
+      echo "" >&2
+      echo "[HAL] Copied to clipboard." >&2
+    else
+      _run_prime
+    fi
     ;;
   init)  do_init ;;
   sync)  do_sync ;;
