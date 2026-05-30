@@ -20,6 +20,7 @@ set "CMD=%~1"
 shift
 
 if /I "%CMD%"=="prime"  goto :prime
+if /I "%CMD%"=="sync"   goto :sync
 if /I "%CMD%"=="init"   goto :init
 if /I "%CMD%"=="help"   goto :help
 
@@ -126,6 +127,26 @@ setx PATH "%PATH%;%TDOT_ROOT%\bin" >nul 2>&1 && (
 )
 exit /b 0
 
+:sync
+echo ================================================================
+echo === HAL sync
+echo ================================================================
+for %%R in (T T.Ops T.Dot) do (
+  echo === %%R ===
+  git -C "%ITI%\%%R" pull --ff-only && echo [ok] || echo [WARNING: pull failed - run: git -C %ITI%\%%R pull]
+)
+for %%R in (U U.Dot U.Ops) do (
+  if exist "%ITI%\%%R\.git" (
+    echo === %%R ===
+    git -C "%ITI%\%%R" pull --ff-only && echo [ok] || echo [WARNING: pull failed - run: git -C %ITI%\%%R pull]
+  )
+)
+if exist "%ME_REPO%\.git" (
+  echo === Me ===
+  git -C "%ME_REPO%" pull --ff-only && echo [ok] || echo [WARNING: pull failed]
+)
+exit /b 0
+
 :help
 echo HAL Level Zero
 echo.
@@ -133,6 +154,7 @@ echo Usage:
 echo   HAL prime [pack ...]  Output AI context block (pipe: HAL prime ^| clip)
 echo                         Packs: papers  lean  process  issues
 echo                         Combine: HAL prime papers lean
+echo   HAL sync              Pull --ff-only on all known repos
 echo   HAL init              Add T.Dot\bin to user PATH
 echo   HAL help              Show this help
 exit /b 0

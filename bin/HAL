@@ -126,6 +126,36 @@ pack_issues() {
 }
 
 # ---------------------------------------------------------------------------
+# HAL sync — pull-first across all known repos
+# ---------------------------------------------------------------------------
+
+do_sync() {
+  banner "HAL sync — $(date '+%Y-%m-%d %H:%M')"
+  local always=("T" "T.Ops" "T.Dot")
+  local optional=("U" "U.Dot" "U.Ops")
+
+  for repo in "${always[@]}"; do
+    echo "=== $repo ==="
+    git -C "$ITI/$repo" pull --ff-only && echo "[ok]" \
+      || echo "[WARNING: pull failed — run: git -C $ITI/$repo pull]"
+  done
+
+  for repo in "${optional[@]}"; do
+    local rpath="$ITI/$repo"
+    [[ -d "$rpath/.git" ]] || continue
+    echo "=== $repo ==="
+    git -C "$rpath" pull --ff-only && echo "[ok]" \
+      || echo "[WARNING: pull failed — run: git -C $rpath pull]"
+  done
+
+  if [[ -d "$ME_REPO/.git" ]]; then
+    echo "=== Me ==="
+    git -C "$ME_REPO" pull --ff-only && echo "[ok]" \
+      || echo "[WARNING: pull failed — run: git -C $ME_REPO pull]"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
 
@@ -144,6 +174,7 @@ Usage:
                            process  — U/PROCESS.md in full
                            issues   — open GitHub issues across T.Ops, U, U.Ops
                          Combine: HAL prime papers lean
+  HAL sync               Pull --ff-only on all known repos (pull-first discipline)
   HAL init               Symlink HAL into ~/.local/bin/HAL
   HAL help               Show this help
 
@@ -170,6 +201,7 @@ case "$cmd" in
     banner "END HAL prime — paste above into any AI session"
     ;;
   init)  do_init ;;
+  sync)  do_sync ;;
   help|-h|--help) usage ;;
   *)
     echo "[HAL] Unknown command: $cmd" >&2
