@@ -95,15 +95,17 @@
       changed_when: false
       tags: arch_packages
 
-    - name: Link i3 config from U.Dot into Arch home
+    - name: Link picom config from U.Dot into Arch home
       ansible.builtin.command: >
         {{ arch }} bash -c "
-          mkdir -p /root/.config/i3 /root/.config/picom &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/i3/config /root/.config/i3/config &&
+          mkdir -p /root/.config/picom &&
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf
         "
       changed_when: false
       tags: dotfiles
+      # NOTE: WM is XFCE4 (xfwm4). i3 is NOT used on tablets.
+      # XFCE Virtual Desktop Manager handles workspaces.
+      # picom linked for optional compositor use alongside xfwm4.
 
     - name: Link bash profile from U.Dot into Arch home
       ansible.builtin.command: >
