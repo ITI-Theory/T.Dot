@@ -169,6 +169,17 @@ pack_tablets() {
   Playbook lives at: T.Dot/provisioning/tablets/site.yml
   Inventory at:      T.Dot/provisioning/tablets/hosts
 
+### PRoot — what it actually is:
+  "PRoot" = ptrace-based root emulation. NOT real root.
+  proot-distro uses the Linux ptrace syscall to intercept filesystem calls and
+  fake a root environment. Inside the container you appear as uid 0 but:
+    - Real kernel ops fail: mount, modprobe, loading modules
+    - File I/O, pacman, running servers all work (ptrace redirects them)
+    - sshd on port 8022 works because Android allows app-user ports >1024
+  The Termux home (/data/data/com.termux/files/home) is bind-mounted into
+  proot at /termux-home — dotfiles cloned in Termux are accessible inside Arch.
+  Ansible uses become=false because there is no real privilege escalation.
+
 TABLETS
 }
 
