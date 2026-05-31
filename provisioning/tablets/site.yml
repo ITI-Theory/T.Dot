@@ -74,6 +74,7 @@
         repo: https://github.com/ITI-Theory/T.Dot.git
         dest: "{{ t_home }}/prj/git/ITI-Theory/T.Dot"
         update: true
+        force: true
       tags: dotfiles
 
     - name: Generate Termux SSH key (for GitHub deploy key)
@@ -109,6 +110,7 @@
         repo: git@github.com:ITI-Theory/U.Dot.git
         dest: "{{ t_home }}/prj/git/ITI-Theory/U.Dot"
         update: true
+        force: true
         accept_hostkey: true
       tags: dotfiles
 
