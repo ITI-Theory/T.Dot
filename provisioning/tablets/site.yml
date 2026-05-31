@@ -59,7 +59,7 @@
       # startxfce4 (or any X app) inside proot.
 
     - name: Check if Arch already installed via proot-distro
-      ansible.builtin.shell: proot-distro list | grep -q '^archlinux' && echo present || echo absent
+      ansible.builtin.shell: proot-distro list 2>&1 | grep -q 'archlinux' && echo present || echo absent
       register: proot_arch_check
       changed_when: false
 
