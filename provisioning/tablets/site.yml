@@ -59,13 +59,13 @@
       # startxfce4 (or any X app) inside proot.
 
     - name: Check if Arch already installed via proot-distro
-      ansible.builtin.command: proot-distro list
-      register: proot_list
+      ansible.builtin.shell: proot-distro list | grep -q '^archlinux' && echo present || echo absent
+      register: proot_arch_check
       changed_when: false
 
     - name: Install Arch Linux ARM via proot-distro
       ansible.builtin.command: proot-distro install danhunsaker/archlinuxarm:latest --name archlinux
-      when: "'archlinux' not in proot_list.stdout"
+      when: "proot_arch_check.stdout == 'absent'"
 
     - name: Clone T.Dot (HAL)
       ansible.builtin.git:
