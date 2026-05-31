@@ -64,21 +64,13 @@
         update: true
       tags: dotfiles
 
-    - name: Clone U.Dot (dotfiles)
-      ansible.builtin.git:
-        repo: https://github.com/ITI-Theory/U.Dot.git
-        dest: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot"
-        update: true
+    - name: Symlink HAL into Termux PATH
+      ansible.builtin.file:
+        src: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL"
+        dest: "{{ ansible_env.HOME }}/.local/bin/HAL"
+        state: link
+        force: true
       tags: dotfiles
-
-    - name: Symlink HAL0 + HAL dispatcher + HAL1 into Termux PATH ($PREFIX/bin)
-      ansible.builtin.shell: |
-        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL0 {{ ansible_env.PREFIX }}/bin/HAL0
-        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL  {{ ansible_env.PREFIX }}/bin/HAL
-        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot/bin/HAL1 {{ ansible_env.PREFIX }}/bin/HAL1
-      changed_when: false
-      tags: dotfiles
-      # Termux PATH = $PREFIX/bin only. ~/.local/bin is NOT in PATH.
 
 - name: Arch (PRoot) layer — packages + Xpra + dotlinks
   hosts: tablets
@@ -138,22 +130,29 @@
         msg: "{{ inventory_hostname }} pubkey: {{ ssh_pubkey.stdout }}"
       tags: dotfiles
 
-    - name: Link dotfiles into Arch home (all via /termux-home — no repos cloned in proot)
+    - name: Clone U.Dot inside Arch (SSH — add pubkey to GitHub first)
       ansible.builtin.command: >
         {{ arch }} bash -c "
-          mkdir -p /root/.config/picom /root/.local/bin &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL0 /root/.local/bin/HAL0 &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL  /root/.local/bin/HAL  &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bin/HAL1 /root/.local/bin/HAL1
+          mkdir -p /root/prj/git/ITI-Theory &&
+          [ -d /root/prj/git/ITI-Theory/U.Dot ] ||
+          GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no' git clone git@github.com:ITI-Theory/U.Dot.git /root/prj/git/ITI-Theory/U.Dot
         "
       changed_when: false
       tags: dotfiles
-      # proot Arch has a real /root/.local/bin in its rootfs — PATH includes it.
-      # Repos live in Termux only; mounted at /termux-home via --bind.
-      # WM is XFCE4 (xfwm4) — i3 not used on tablets.
+
+    - name: Link dotfiles from U.Dot into Arch home
+      ansible.builtin.command: >
+        {{ arch }} bash -c "
+          mkdir -p /root/.config/picom /root/.local/bin &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
+          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL /root/.local/bin/HAL
+        "
+      changed_when: false
+      tags: dotfiles
+      # WM is XFCE4 (xfwm4). i3 is NOT used on tablets.
+      # Files source from /termux-home (Termux home bind-mount) — no re-clone needed.
 
     - name: Verify Xpra is available inside Arch
       ansible.builtin.command: >
@@ -201,9 +200,7 @@
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
-          ln -sfn /root/prj/git/ITI-Theory/T.Dot/bin/HAL0 /root/.local/bin/HAL0 &&
-          ln -sfn /root/prj/git/ITI-Theory/T.Dot/bin/HAL  /root/.local/bin/HAL  &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bin/HAL1 /root/.local/bin/HAL1
+          ln -sfn /root/prj/git/ITI-Theory/T.Dot/bin/HAL /root/.local/bin/HAL
         "
       changed_when: false
       tags: dotfiles
