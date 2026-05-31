@@ -145,7 +145,7 @@ fi
 pkill -f xfce4-session 2>/dev/null; pkill -f barrierc 2>/dev/null; pkill -f termux-x11 2>/dev/null
 rm -f "\$T/.X11-unix/X0"
 sleep 1
-TMPDIR=\$T termux-x11 :0 > /tmp/x11.log 2>&1 &
+TMPDIR=\$T termux-x11 :0 > \$T/x11.log 2>&1 &
 sleep 4
 [[ -S "\$T/.X11-unix/X0" ]] && echo "[ok] X11 socket" || { echo "[error] X11 socket missing"; exit 1; }
 echo "[note] Tap the Termux:X11 app icon on the tablet screen to see the desktop"
