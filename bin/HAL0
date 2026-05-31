@@ -244,8 +244,8 @@ STACK
 # HAL tablets — implementation module (source from HAL-tablets)
 # ---------------------------------------------------------------------------
 
-# shellcheck source=HAL-tablets
-source "$SCRIPT_DIR/HAL-tablets"
+# shellcheck source=HAL0-tablets
+source "$SCRIPT_DIR/HAL0-tablets"
 
 # ---------------------------------------------------------------------------
 # HAL sync — pull-first across all known repos
