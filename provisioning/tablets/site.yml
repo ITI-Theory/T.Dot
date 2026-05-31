@@ -53,8 +53,11 @@
       register: proot_list
       changed_when: false
 
-    - name: Install Arch Linux via proot-distro
-      ansible.builtin.command: proot-distro install archlinux
+    - name: Install Arch Linux ARM via proot-distro (arm64 rootfs tarball)
+      ansible.builtin.command: >-
+        proot-distro install
+        http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
+        --override-name archlinux
       when: "'archlinux' not in proot_list.stdout"
 
     - name: Clone T.Dot (HAL)
