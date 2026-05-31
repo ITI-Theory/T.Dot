@@ -74,11 +74,40 @@
         update: true
       tags: dotfiles
 
-    - name: Clone U.Dot (dotfiles)
+    - name: Generate Termux SSH key (for GitHub deploy key)
+      ansible.builtin.shell: |
+        mkdir -p {{ t_home }}/.ssh
+        if [ ! -f {{ t_home }}/.ssh/id_ed25519 ]; then
+          ssh-keygen -t ed25519 -C "termux-{{ inventory_hostname }}" -f {{ t_home }}/.ssh/id_ed25519 -N ''
+        fi
+      changed_when: false
+      tags: [dotfiles, keys]
+
+    - name: Trust github.com host key in Termux
+      ansible.builtin.shell: |
+        mkdir -p {{ t_home }}/.ssh
+        ssh-keyscan -H github.com >> {{ t_home }}/.ssh/known_hosts 2>/dev/null
+        sort -u {{ t_home }}/.ssh/known_hosts -o {{ t_home }}/.ssh/known_hosts
+      changed_when: false
+      tags: [dotfiles, keys]
+
+    - name: Display Termux SSH public key (add as GitHub deploy key for U.Dot)
+      ansible.builtin.command: cat {{ t_home }}/.ssh/id_ed25519.pub
+      register: _pubkey
+      changed_when: false
+      tags: [dotfiles, keys]
+
+    - name: Print pubkey for {{ inventory_hostname }}
+      ansible.builtin.debug:
+        msg: "DEPLOY KEY {{ inventory_hostname }}: {{ _pubkey.stdout }}"
+      tags: [dotfiles, keys]
+
+    - name: Clone U.Dot (dotfiles) via SSH deploy key
       ansible.builtin.git:
-        repo: https://github.com/ITI-Theory/U.Dot.git
+        repo: git@github.com:ITI-Theory/U.Dot.git
         dest: "{{ t_home }}/prj/git/ITI-Theory/U.Dot"
         update: true
+        accept_hostkey: true
       tags: dotfiles
 
     - name: Symlink HAL0 + HAL dispatcher + HAL1 into Termux PATH
