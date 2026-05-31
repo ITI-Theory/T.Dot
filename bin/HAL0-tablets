@@ -71,11 +71,14 @@ pack_tablets() {
   Start inside proot: DISPLAY=:0 dbus-run-session -- xfce4-session
   (NOT dbus-launch — not present in bookworm dbus package)
 
-### Barrier
-  Version: 2.4.0 | Server: 10.133.134.136:24800
-  SSL disabled — --disable-crypto on client + unchecked in GUI
-  Screen names: Tablet1, Tablet2, Tablet3 (capital T)
-  Client cmd: DISPLAY=:0 barrierc --no-tray --disable-crypto --name $NAME --display :0 10.133.134.136
+### KVM — Input Leap (replaces Barrier 2.4.0)
+  Server: input-leaps.exe 3.0.2 | 10.133.134.136:24800
+  Crypto disabled — --disable-crypto on server + client
+  Clipboard sharing DISABLED (crashes Barrier 2.x on screen-switch; may re-enable in IL)
+  Screen layout: Tablet1 ← Laptop-P14s → Tablet3 (Tablet2 below Laptop)
+  Config: C:/Users/alist/AppData/Local/Barrier/barrier.sgc (git: T.Dot/provisioning/tablets/Barrier-L.sgc)
+  Client cmd (runit service): DISPLAY=:0 barrierc --no-tray --disable-crypto --name $NAME -f 10.133.134.136
+  switchDelay = 500ms (prevents accidental screen switches at edge)
 
 ### Battery optimization (CRITICAL)
   Android kills Termux when screen turns off unless exempted.
@@ -104,14 +107,13 @@ _tablet_check() {
     result=$(ssh $SSH_OPTS "$host" \
       'SOCK=/data/data/com.termux/files/usr/tmp/tmux.sock
        sshd_n=$(pgrep -c sshd 2>/dev/null || echo 0)
-       tmux_n=$(tmux -S "$SOCK" list-sessions 2>/dev/null | wc -l | tr -d " ")
+       SVDIR=/data/data/com.termux/files/usr/var/service
        x11=$( [[ -e /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ]] && echo yes || echo no )
-       sessions=$(tmux -S "$SOCK" list-sessions 2>/dev/null || true)
-       xfce=$(echo "$sessions" | grep -c xfce || true)
-       barrier_sess=$(echo "$sessions" | grep -c barrier || true)
+       xfce=$(sv status $SVDIR/tx11-xfce4 2>/dev/null | grep -c "^run" || echo 0)
+       barrierc=$(sv status $SVDIR/barrierc 2>/dev/null | grep -c "^run" || echo 0)
        barrierc_n=$(pgrep -c barrierc 2>/dev/null || echo 0)
        boot=$( [[ -x ~/.termux/boot/start-services.sh ]] && echo yes || echo "NO-run:boot-install" )
-       echo "ssh=up sshd=$sshd_n tmux=$tmux_n X11=$x11 xfce=$xfce barrier_sess=$barrier_sess barrierc=$barrierc_n boot=$boot"' \
+       echo "ssh=up sshd=$sshd_n X11=$x11 xfce-svc=$xfce barrierc-svc=$barrierc barrierc=$barrierc_n boot=$boot"' \
       2>/dev/null) || { echo "  $label ($host): SSH=DOWN"; all_ok=1; continue; }
     echo "  $label ($host): $result"
   done
@@ -126,59 +128,34 @@ _do_start_one() {
   local host="$1" name="$2"
   echo "--- $name ($host) ---"
 
-  # Phase 1: quick setup SSH (cleanup only — does NOT start termux-x11 here,
-  # because Android phantom-kills anything born from a closed SSH session)
-  ssh $SSH_OPTS "$host" bash <<ENDSSH
-T=/data/data/com.termux/files/usr/tmp
+  # Uses runit (termux-services) — services auto-restart, survive SSH disconnect.
+  # Required runit services on each tablet (set up via: HAL tablets boot-install):
+  #   sshd, tx11, tx11-xfce4, barrierc
+  # barrierc/run uses input-leapc client name matching the screen name.
+  SVDIR=/data/data/com.termux/files/usr/var/service
 
+  ssh $SSH_OPTS "$host" bash <<ENDSSH
 echo "[start] $name — \$(date)"
-termux-wake-lock && echo "[ok] wakelock" || echo "[warn] wakelock failed (not fatal)"
-SVDIR=/data/data/com.termux/files/usr/var/service
-# Only start runsvdir if it's not already running — a second instance causes
-# "unable to lock supervise/lock" spam which can take sshd down.
+termux-wake-lock 2>/dev/null && echo "[ok] wakelock" || echo "[warn] wakelock failed (not fatal)"
+
+# Ensure runsvdir is running
 if ! pgrep -x runsvdir > /dev/null 2>&1; then
-  nohup runsvdir \$SVDIR > /dev/null 2>&1 & disown
-  sleep 1; echo "[ok] runsvdir started"
+  nohup runsvdir $SVDIR > /dev/null 2>&1 & disown
+  sleep 2; echo "[ok] runsvdir started"
 else
   echo "[ok] runsvdir already running"
 fi
-pkill -f xfce4-session 2>/dev/null; pkill -f barrierc 2>/dev/null; pkill -f termux-x11 2>/dev/null
-rm -f "\$T/.X11-unix/X0"
-echo "[ok] cleanup done"
+
+# Bring up all required services
+for svc in tx11 tx11-xfce4 barrierc; do
+  sv up $SVDIR/\$svc 2>/dev/null && echo "[ok] sv up \$svc" || echo "[warn] \$svc not found — run: HAL tablets boot-install"
+done
+
+echo "[status]"
+sv status $SVDIR/tx11 $SVDIR/tx11-xfce4 $SVDIR/barrierc 2>/dev/null || true
 ENDSSH
 
-  # Phase 2: THREE persistent SSH sessions — all held open in local WSL2 tmux.
-  # Android only phantom-kills processes from *closed* SSH sessions.
-  # As long as these SSH connections stay open, the processes are safe.
-  local lsock="/tmp/hal-tablets.sock"
-
-  # Kill any stale sessions for this tablet
-  for sess in "${name}" "${name}-x11" "${name}-xfce" "${name}-barrier"; do
-    tmux -S "$lsock" kill-session -t "$sess" 2>/dev/null || true
-  done
-  sleep 1
-
-  # Session 1: termux-x11 (X display server)
-  tmux -S "$lsock" new-session -d -s "${name}-x11" \
-    "ssh $SSH_OPTS $host \"T=/data/data/com.termux/files/usr/tmp; TMPDIR=\\\$T termux-x11 :0\""
-  echo "[ok] ${name}-x11 session started"
-  sleep 5  # wait for X socket to appear
-
-  # Session 2: XFCE desktop (loops so it restarts on crash)
-  tmux -S "$lsock" new-session -d -s "${name}-xfce" \
-    "ssh $SSH_OPTS $host \"T=/data/data/com.termux/files/usr/tmp; TMPDIR=\\\$T proot-distro login debian --bind ~/:/termux-home --bind \\\$T/.X11-unix:/tmp/.X11-unix -- bash -c 'while true; do DISPLAY=:0 dbus-run-session -- xfce4-session 2>&1; sleep 5; done'\""
-  echo "[ok] ${name}-xfce session started"
-  sleep 5
-
-  # Session 3: barrierc (already loops on exit)
-  tmux -S "$lsock" new-session -d -s "${name}-barrier" \
-    "ssh $SSH_OPTS $host \"T=/data/data/com.termux/files/usr/tmp; TMPDIR=\\\$T proot-distro login debian --bind ~/:/termux-home --bind \\\$T/.X11-unix:/tmp/.X11-unix -- bash -c 'while true; do DISPLAY=:0 barrierc --no-tray --disable-crypto --name ${name} --display :0 10.133.134.136; sleep 3; done'\""
-  echo "[ok] ${name}-barrier session started"
-  sleep 3
-
-  echo "[note] Tap the Termux:X11 app icon on $name to see the desktop"
-  echo "[ok] persistent SSH sessions: ${name}-x11  ${name}-xfce  ${name}-barrier"
-  echo "[done] $name"
+  echo "[done] $name — tap Termux:X11 icon on tablet if desktop not visible"
 }
 
 # ---------------------------------------------------------------------------
@@ -186,35 +163,38 @@ ENDSSH
 # ---------------------------------------------------------------------------
 
 _do_start_barrier_server() {
-  # Manages the Windows Barrier service (barrierd.exe), which owns barriers.exe.
-  # One-time setup (already done on Laptop-P14s):
-  #   sc.exe config Barrier start= auto          (requires elevation)
-  #   reg add HKCU\Software\Debauchee\Barrier /v configFile /d <path> /f
-  #   reg add HKCU\Software\Debauchee\Barrier /v autoConfig /d false /f
-  #   reg add HKCU\Software\Debauchee\Barrier /v autoStart  /d true  /f
-  # After that, just: sc start/stop Barrier (via UAC elevation below).
+  # Launches Input Leap server (input-leaps.exe) in foreground.
+  # NOTE: Barrier service (barrierd) is DISABLED — do not re-enable.
+  # Config: C:/Users/alist/AppData/Local/Barrier/barrier.sgc
+  #   clipboardSharing = false  (crashes on screen-switch in Barrier 2.x)
+  #   screenSaverSync = false
+  #   win32KeepForeground = false
+  #   switchDelay = 500
+  local il_exe="/c/Program Files/InputLeap/input-leaps.exe"
+  local cfg="C:/Users/alist/AppData/Local/Barrier/barrier.sgc"
 
-  local state
-  state=$(sc.exe query Barrier 2>/dev/null | grep 'STATE' | awk '{print $4}')
-
-  if [[ "$state" == "RUNNING" ]]; then
-    echo "[ok] Barrier service already RUNNING"
-    netstat.exe -anop tcp 2>/dev/null | grep ':24800' || true
+  if tasklist.exe 2>/dev/null | grep -qi 'input-leaps'; then
+    echo "[ok] input-leaps.exe already running"
     return 0
   fi
 
-  echo "[info] Starting Barrier service (requires UAC)..."
-  powershell.exe -NoProfile -Command \
-    "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -Command sc.exe start Barrier'" \
-    2>/dev/null
-  sleep 3
+  if [[ ! -f "$il_exe" ]]; then
+    echo "[ABORT] Input Leap not found at: $il_exe"
+    echo "        Download: https://github.com/input-leap/input-leap/releases"
+    return 1
+  fi
 
-  if netstat.exe -anop tcp 2>/dev/null | grep -q ':24800'; then
-    echo "[ok] Barrier service started — port 24800 listening"
-    tasklist.exe 2>/dev/null | grep -i 'barriers\|barrierd' || true
+  echo "[info] Starting Input Leap server..."
+  # Run detached via powershell Start-Process so it survives terminal close
+  powershell.exe -NoProfile -Command \
+    "Start-Process '${il_exe//\//\\\\}' -ArgumentList '-f','--no-tray','--disable-crypto','--name','Laptop-P14s','-c','${cfg}','--address',':24800' -WindowStyle Hidden" \
+    2>/dev/null
+  sleep 2
+
+  if tasklist.exe 2>/dev/null | grep -qi 'input-leaps'; then
+    echo "[ok] input-leaps.exe started — port 24800"
   else
-    echo "[WARN] Barrier service did not start — port 24800 not listening"
-    sc.exe query Barrier 2>/dev/null | grep 'STATE' || true
+    echo "[WARN] input-leaps.exe did not start — check manually"
   fi
 }
 

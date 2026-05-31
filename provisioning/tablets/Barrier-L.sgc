@@ -39,21 +39,22 @@ end
 section: links
 	Laptop-P14s:
 		down = Tablet2
-	Tablet1:
-		right = Tablet2
-	Tablet2:
-		right = Tablet3
 		left = Tablet1
+		right = Tablet3
+	Tablet1:
+		right = Laptop-P14s
+	Tablet2:
 		up = Laptop-P14s
 	Tablet3:
-		left = Tablet2
+		left = Laptop-P14s
 end
 
 section: options
 	relativeMouseMoves = false
-	screenSaverSync = true
+	screenSaverSync = false
 	win32KeepForeground = false
-	clipboardSharing = true
+	clipboardSharing = false
+	switchDelay = 500
 	switchCorners = none 
 	switchCornerSize = 0
 end
