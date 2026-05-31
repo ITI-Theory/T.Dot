@@ -1,6 +1,6 @@
 # Ansible inventory — 3× Lenovo IdeaPad tablets (Termux/Android)
 # Targets are Termux sessions, not full Linux.
-# Run from P14s WSL2 after ssh-copy-id is done (see HAL notes tablets).
+# Run from P14s WSL2 (Debian) after ssh-copy-id is done (see HAL notes tablets).
 #
 # Usage:
 #   ansible-playbook -i hosts site.yml
@@ -16,7 +16,7 @@ ansible_port=8022
 ansible_python_interpreter=/data/data/com.termux/files/usr/bin/python
 ansible_become=false
 # Termux has no sudo. All tasks run as the Termux user.
-# Use proot-distro for root-requiring work inside the Arch container.
+# Use proot-distro for root-requiring work inside the Debian container.
 
 [wsl2]
 p14s ansible_connection=local ansible_python_interpreter=/usr/bin/python
