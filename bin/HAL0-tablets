@@ -162,7 +162,8 @@ else
   pkill -f termux-x11 2>/dev/null
   rm -f "\$T/.X11-unix/X0"
   sleep 1
-  TMPDIR=\$T termux-x11 :0 &
+  # setsid fully detaches from SSH session's process group so Android doesn't kill it on disconnect
+  setsid env TMPDIR=\$T termux-x11 :0 > /dev/null 2>&1 &
   disown
   sleep 4
   echo "[note] Tap the Termux:X11 app icon on the tablet screen to see the desktop"
