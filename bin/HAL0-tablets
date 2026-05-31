@@ -124,73 +124,59 @@ _tablet_check() {
 
 _do_start_one() {
   local host="$1" name="$2"
+  local wsock="/tmp/hal-tablet-${name}.sock"
   echo "--- $name ($host) ---"
+
+  # Phase 1: quick setup SSH (closes after setup)
   ssh $SSH_OPTS "$host" bash <<ENDSSH
 T=/data/data/com.termux/files/usr/tmp
-SOCK=\$T/tmux.sock
 NAME=$name
 BARRIER=10.133.134.136
 
 echo "[start] \$NAME — \$(date)"
-# Acquire wakelock + ensure runsvdir (sshd supervisor) is running persistently.
-# Both must outlive this SSH session, so disown them.
 termux-wake-lock && echo "[ok] wakelock" || echo "[warn] wakelock failed (not fatal)"
 SVDIR=/data/data/com.termux/files/usr/var/service
 if ! pgrep -x runsvdir > /dev/null 2>&1; then
-  nohup bash -c "runsvdir \$SVDIR" > /dev/null 2>&1 &
-  disown
-  sleep 1
-  echo "[ok] runsvdir started"
+  runsvdir \$SVDIR &
+  sleep 1; echo "[ok] runsvdir started"
 else
   echo "[ok] runsvdir already running"
 fi
-# Only kill xfce/barrier sessions — leave termux-x11 alone if X socket already exists.
-# Killing termux-x11 triggers "Process completed (press Enter)" in the Termux terminal,
-# which blocks the next SSH connection until someone physically taps Enter on the tablet.
-pkill -f xfce4-session 2>/dev/null; pkill -f barrierc 2>/dev/null
-tmux -S "\$SOCK" kill-server 2>/dev/null
+pkill -f xfce4-session 2>/dev/null; pkill -f barrierc 2>/dev/null; pkill -f termux-x11 2>/dev/null
+rm -f "\$T/.X11-unix/X0"
 sleep 1
-# Detect live vs stale X11 socket: check both the socket file and the server process.
-x11_live=false
-if [[ -S "\$T/.X11-unix/X0" ]] && pgrep -f "termux-x11" > /dev/null 2>&1; then
-  x11_live=true
-fi
-if \$x11_live; then
-  echo "[ok] X11 socket already up — skipping termux-x11 restart"
-else
-  echo "[info] X11 socket missing or stale — restarting termux-x11 server"
-  pkill -f termux-x11 2>/dev/null
-  rm -f "\$T/.X11-unix/X0"
-  sleep 1
-  # setsid fully detaches from SSH session's process group so Android doesn't kill it on disconnect
-  setsid env TMPDIR=\$T termux-x11 :0 > /dev/null 2>&1 &
-  disown
-  sleep 4
-  echo "[note] Tap the Termux:X11 app icon on the tablet screen to see the desktop"
-fi
-if [[ -S "\$T/.X11-unix/X0" ]]; then
-  echo "[ok] X11 socket"
-else
-  echo "[error] X11 socket missing — open Termux:X11 APK on the tablet screen"
-  exit 1
-fi
-tmux -S "\$SOCK" new-session -d -s xfce \
-  "TMPDIR=\$T proot-distro login debian --bind ~/:/termux-home --bind \$T/.X11-unix:/tmp/.X11-unix -- bash -c 'DISPLAY=:0 dbus-run-session -- xfce4-session'"
+TMPDIR=\$T termux-x11 :0 > /tmp/x11.log 2>&1 &
 sleep 4
-echo "[ok] xfce tmux session"
-tmux -S "\$SOCK" new-session -d -s barrier \
-  "TMPDIR=\$T proot-distro login debian --bind ~/:/termux-home --bind \$T/.X11-unix:/tmp/.X11-unix -- bash -c 'while true; do DISPLAY=:0 barrierc --no-tray --disable-crypto --name \$NAME --display :0 \$BARRIER; sleep 3; done'"
-sleep 4
-barrierc_n=\$(pgrep -c barrierc 2>/dev/null || echo 0)
-if [[ "\$barrierc_n" -gt 0 ]]; then
-  echo "[ok] barrierc running (pid count=\$barrierc_n)"
-else
-  echo "[WARN] barrierc NOT running — barrier server may be down or screen name wrong (\$NAME)"
-  echo "       Check: is Barrier server running on \$BARRIER with screen '\$NAME' configured?"
-fi
-tmux -S "\$SOCK" list-sessions
-echo "[done] \$NAME"
+[[ -S "\$T/.X11-unix/X0" ]] && echo "[ok] X11 socket" || { echo "[error] X11 socket missing"; exit 1; }
+echo "[note] Tap the Termux:X11 app icon on the tablet screen to see the desktop"
 ENDSSH
+
+  # Phase 2: persistent SSH session that keeps XFCE + barrierc alive
+  # Runs inside a local tmux window so the SSH connection never closes
+  local lsock="/tmp/hal-tablets.sock"
+  tmux -S "$lsock" new-session -d -s "$name" 2>/dev/null || true
+  tmux -S "$lsock" send-keys -t "$name" "" Enter 2>/dev/null  # clear any prompt
+  tmux -S "$lsock" new-window -t "$name" -n "xfce" \
+    "ssh $SSH_OPTS $host \"T=/data/data/com.termux/files/usr/tmp; TMPDIR=\\\$T proot-distro login debian --bind ~/:/termux-home --bind \\\$T/.X11-unix:/tmp/.X11-unix -- bash -c 'DISPLAY=:0 dbus-run-session -- xfce4-session 2>&1'\"" 2>/dev/null || \
+  tmux -S "$lsock" new-session -d -s "${name}-xfce" \
+    "ssh $SSH_OPTS $host \"T=/data/data/com.termux/files/usr/tmp; TMPDIR=\\\$T proot-distro login debian --bind ~/:/termux-home --bind \\\$T/.X11-unix:/tmp/.X11-unix -- bash -c 'DISPLAY=:0 dbus-run-session -- xfce4-session 2>&1'\""
+  sleep 5
+
+  tmux -S "$lsock" new-session -d -s "${name}-barrier" \
+    "ssh $SSH_OPTS $host \"T=/data/data/com.termux/files/usr/tmp; NAME=$name; BARRIER=10.133.134.136; TMPDIR=\\\$T proot-distro login debian --bind ~/:/termux-home --bind \\\$T/.X11-unix:/tmp/.X11-unix -- bash -c 'while true; do DISPLAY=:0 barrierc --no-tray --disable-crypto --name \\\$NAME --display :0 \\\$BARRIER; sleep 3; done'\""
+  sleep 3
+
+  echo "[ok] persistent SSH sessions open in local tmux (sock: $lsock)"
+  echo "[ok] sessions: ${name}-xfce  ${name}-barrier"
+
+  # Check barrierc came up on tablet
+  barrierc_n=$(ssh $SSH_OPTS "$host" 'pgrep -c barrierc 2>/dev/null || echo 0' 2>/dev/null || echo 0)
+  if [[ "$barrierc_n" -gt 0 ]]; then
+    echo "[ok] barrierc running (pid count=$barrierc_n)"
+  else
+    echo "[WARN] barrierc NOT running — barrier server may be down or screen name wrong ($name)"
+  fi
+  echo "[done] $name"
 }
 
 # ---------------------------------------------------------------------------
