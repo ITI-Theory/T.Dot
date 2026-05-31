@@ -64,12 +64,12 @@
         update: true
       tags: dotfiles
 
-    - name: Symlink HAL into Termux PATH
-      ansible.builtin.file:
-        src: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL"
-        dest: "{{ ansible_env.HOME }}/.local/bin/HAL"
-        state: link
-        force: true
+    - name: Symlink HAL0 + HAL dispatcher into Termux PATH
+      ansible.builtin.shell: |
+        mkdir -p {{ ansible_env.HOME }}/.local/bin
+        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL0 {{ ansible_env.HOME }}/.local/bin/HAL0
+        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL  {{ ansible_env.HOME }}/.local/bin/HAL
+      changed_when: false
       tags: dotfiles
 
 - name: Arch (PRoot) layer — packages + Xpra + dotlinks
@@ -147,7 +147,9 @@
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL /root/.local/bin/HAL
+          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL0 /root/.local/bin/HAL0 &&
+          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL  /root/.local/bin/HAL  &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bin/HAL1        /root/.local/bin/HAL1
         "
       changed_when: false
       tags: dotfiles
@@ -200,7 +202,9 @@
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
           ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
-          ln -sfn /root/prj/git/ITI-Theory/T.Dot/bin/HAL /root/.local/bin/HAL
+          ln -sfn /root/prj/git/ITI-Theory/T.Dot/bin/HAL0 /root/.local/bin/HAL0 &&
+          ln -sfn /root/prj/git/ITI-Theory/T.Dot/bin/HAL  /root/.local/bin/HAL  &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bin/HAL1 /root/.local/bin/HAL1
         "
       changed_when: false
       tags: dotfiles
