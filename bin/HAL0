@@ -338,7 +338,7 @@ do_tablets() {
         echo ""
         echo "--- $host ---"
         _tablet_ssh "$host" \
-          'am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d package:com.termux && sleep 1 && am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d package:com.termux.x11' \
+          'am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux" && sleep 1 && am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux.x11"' \
           && echo "[ok] dialog launched — tap Allow on tablet" \
           || echo "[FAILED] ssh connect failed"
       done
@@ -399,9 +399,34 @@ TUSAGE
 _do_start_one() {
   local host="$1" name="$2"
   echo "--- $name ($host) ---"
-  _tablet_ssh "$host" "bash ~/start-desktop.sh $name" \
-    && echo "[$name] done" \
-    || echo "[$name] FAILED — is sshd running?"
+  ssh $SSH_OPTS "$host" bash <<ENDSSH
+T=/data/data/com.termux/files/usr/tmp
+SOCK=\$T/tmux.sock
+NAME=$name
+BARRIER=10.133.134.136
+
+echo "[start-desktop] \$NAME — \$(date)"
+termux-wake-lock && echo "[ok] wakelock" || echo "[warn] wakelock failed (not fatal)"
+pkill -f xfce4-session 2>/dev/null; pkill -f barrierc 2>/dev/null; pkill -f termux-x11 2>/dev/null
+tmux -S "\$SOCK" kill-server 2>/dev/null
+sleep 1
+am start -n com.termux.x11/.MainActivity
+sleep 1
+TMPDIR=\$T termux-x11 :0 &
+sleep 3
+ls "\$T/.X11-unix/" 2>/dev/null && echo "[ok] X11 socket" || { echo "[error] X11 socket missing — is Termux:X11 APK installed?"; exit 1; }
+tmux -S "\$SOCK" new-session -d -s xfce \
+  "TMPDIR=\$T proot-distro login debian --bind ~/:/termux-home --bind \$T/.X11-unix:/tmp/.X11-unix -- bash -c 'DISPLAY=:0 dbus-run-session -- xfce4-session'"
+sleep 4
+echo "[ok] xfce tmux session"
+tmux -S "\$SOCK" new-session -d -s barrier \
+  "TMPDIR=\$T proot-distro login debian --bind ~/:/termux-home --bind \$T/.X11-unix:/tmp/.X11-unix -- bash -c 'while true; do DISPLAY=:0 barrierc --no-tray --disable-crypto --name \$NAME --display :0 \$BARRIER; sleep 3; done'"
+sleep 2
+echo "[ok] barrier tmux session"
+echo "--- Sessions ---"
+tmux -S "\$SOCK" list-sessions
+echo "[done]"
+ENDSSH
 }
 
 # ---------------------------------------------------------------------------
