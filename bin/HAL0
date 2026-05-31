@@ -14,6 +14,47 @@ ME_REPO="$(cd -- "$ITI/../Me" 2>/dev/null && pwd)" || ME_REPO="$HOME/prj/git/Me"
 section() { echo ""; echo "--- $* ---"; }
 banner()  { echo "================================================================"; echo "=== $*"; echo "================================================================"; }
 
+# Load a module — fails loudly if file is missing (e.g. init never run)
+_hal_source() {
+  local mod="$SCRIPT_DIR/$1"
+  if [[ ! -f "$mod" ]]; then
+    echo "[HAL] ERROR: module '$1' not found at $mod" >&2
+    echo "[HAL] Reinstall: cd T.Dot && bin/HAL0 init" >&2
+    exit 1
+  fi
+  # shellcheck source=/dev/null
+  source "$mod"
+}
+
+_hal_selftest() {
+  local ok=1
+  echo "=== HAL selftest ==="
+  # Wrappers in ~/.local/bin
+  for f in HAL HAL0; do
+    if [[ -x "$HOME/.local/bin/$f" ]]; then
+      echo "  [ok] ~/.local/bin/$f"
+    else
+      echo "  [FAIL] ~/.local/bin/$f — missing, run: HAL0 init"
+      ok=0
+    fi
+  done
+  # All HAL0-* modules reachable from repo
+  for mod in "$SCRIPT_DIR"/HAL0-*; do
+    [[ -f "$mod" ]] \
+      && echo "  [ok] $(basename "$mod") found at $mod" \
+      || { echo "  [FAIL] $mod — not found"; ok=0; }
+  done
+  # PATH check
+  if command -v HAL &>/dev/null; then
+    echo "  [ok] HAL in PATH ($(command -v HAL))"
+  else
+    echo "  [WARN] HAL not in PATH — add to ~/.bashrc:"
+    echo "         export PATH=\"\$HOME/.local/bin:\$PATH\""
+  fi
+  echo ""
+  [[ $ok -eq 1 ]] && echo "  result: PASS" || { echo "  result: FAIL"; return 1; }
+}
+
 # ---------------------------------------------------------------------------
 # HAL init — symlink HAL into PATH
 # ---------------------------------------------------------------------------
@@ -30,6 +71,8 @@ do_init() {
   done
   echo "[HAL0] init complete — HAL0 and HAL dispatcher installed to ~/.local/bin"
   echo "[HAL0] Ensure ~/.local/bin is in PATH (add to ~/.bashrc if needed)"
+  echo ""
+  _hal_selftest
 }
 
 # ---------------------------------------------------------------------------
@@ -250,8 +293,7 @@ STACK
 # HAL tablets — implementation module (source from HAL-tablets)
 # ---------------------------------------------------------------------------
 
-# shellcheck source=HAL0-tablets
-source "$SCRIPT_DIR/HAL0-tablets"
+_hal_source HAL0-tablets
 
 # ---------------------------------------------------------------------------
 # HAL sync — pull-first across all known repos
@@ -312,7 +354,8 @@ Usage:
   HAL0 tablets start [N] Start X11+XFCE4+Barrier (pre+post check, aborts if down)
   HAL0 tablets sshd      Restart sshd on all 3 tablets + post-check
   HAL0 sync              Pull --ff-only on all known repos (pull-first discipline)
-  HAL0 init              Link HAL0 + HAL dispatcher into ~/.local/bin
+  HAL0 init              Install HAL0 + HAL dispatcher into ~/.local/bin + selftest
+  HAL0 selftest          Verify installation: wrappers, modules, PATH
   HAL0 help              Show this help
 
 USAGE
@@ -366,10 +409,11 @@ case "$cmd" in
       _run_prime
     fi
     ;;
-  init)    do_init ;;
-  sync)    do_sync ;;
-  notes)   do_notes "${1:-}" ;;
-  tablets) do_tablets "$@" ;;
+  init)     do_init ;;
+  selftest) _hal_selftest ;;
+  sync)     do_sync ;;
+  notes)    do_notes "${1:-}" ;;
+  tablets)  do_tablets "$@" ;;
   help|-h|--help) usage ;;
   *)
     echo "[HAL] Unknown command: $cmd" >&2
