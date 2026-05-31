@@ -125,19 +125,11 @@
       changed_when: false
       tags: dotfiles
 
-    - name: Link dotfiles from U.Dot into Arch home
+    - name: Link dotfiles from U.Dot (via HAL dotfiles)
       ansible.builtin.command: >
-        {{ arch }} bash -c "
-          mkdir -p /root/.config/picom /root/.local/bin &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL /root/.local/bin/HAL
-        "
+        {{ arch }} bash /root/prj/git/ITI-Theory/T.Dot/bin/HAL dotfiles
       changed_when: false
       tags: dotfiles
-      # WM is XFCE4 (xfwm4). i3 is NOT used on tablets.
-      # Files source from /termux-home (Termux home bind-mount) — no re-clone needed.
 
     - name: Verify Xpra is available inside Arch
       ansible.builtin.command: >
@@ -178,14 +170,7 @@
       changed_when: false
       tags: arch_packages
 
-    - name: Link dotfiles from U.Dot into WSL2 home
-      ansible.builtin.command: >
-        bash -c "
-          mkdir -p /root/.config/picom /root/.local/bin &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
-          ln -sfn /root/prj/git/ITI-Theory/T.Dot/bin/HAL /root/.local/bin/HAL
-        "
+    - name: Link dotfiles from U.Dot (via HAL dotfiles)
+      ansible.builtin.command: /root/prj/git/ITI-Theory/T.Dot/bin/HAL dotfiles
       changed_when: false
       tags: dotfiles
