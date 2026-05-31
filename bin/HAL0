@@ -27,32 +27,37 @@ _hal_source() {
 }
 
 _hal_selftest() {
-  local ok=1
-  echo "=== HAL selftest ==="
-  # Wrappers in ~/.local/bin
+  # --quiet : silent on success; always loud on failure (stderr)
+  local quiet=0
+  [[ "${1:-}" == "--quiet" ]] && quiet=1
+  local ok=1 failures=()
+
   for f in HAL HAL0; do
-    if [[ -x "$HOME/.local/bin/$f" ]]; then
-      echo "  [ok] ~/.local/bin/$f"
-    else
-      echo "  [FAIL] ~/.local/bin/$f — missing, run: HAL0 init"
-      ok=0
-    fi
+    [[ -x "$HOME/.local/bin/$f" ]] \
+      || { failures+=("~/.local/bin/$f — missing, run: HAL0 init"); ok=0; }
   done
-  # All HAL0-* modules reachable from repo
   for mod in "$SCRIPT_DIR"/HAL0-*; do
     [[ -f "$mod" ]] \
-      && echo "  [ok] $(basename "$mod") found at $mod" \
-      || { echo "  [FAIL] $mod — not found"; ok=0; }
+      || { failures+=("$(basename "$mod") not found — run: HAL0 init"); ok=0; }
   done
-  # PATH check
-  if command -v HAL &>/dev/null; then
-    echo "  [ok] HAL in PATH ($(command -v HAL))"
+  command -v HAL &>/dev/null \
+    || { failures+=("HAL not in PATH — add to ~/.bashrc: export PATH=\"\$HOME/.local/bin:\$PATH\""); ok=0; }
+
+  if [[ $ok -eq 1 ]]; then
+    if [[ $quiet -eq 0 ]]; then
+      echo "=== HAL selftest ==="
+      for f in HAL HAL0; do echo "  [ok] ~/.local/bin/$f"; done
+      for mod in "$SCRIPT_DIR"/HAL0-*; do echo "  [ok] $(basename "$mod")"; done
+      echo "  [ok] HAL in PATH ($(command -v HAL))"
+      echo ""
+      echo "  result: PASS"
+    fi
   else
-    echo "  [WARN] HAL not in PATH — add to ~/.bashrc:"
-    echo "         export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo "=== HAL selftest: FAIL ===" >&2
+    for f in "${failures[@]}"; do echo "  [FAIL] $f" >&2; done
+    echo "" >&2
+    return 1
   fi
-  echo ""
-  [[ $ok -eq 1 ]] && echo "  result: PASS" || { echo "  result: FAIL"; return 1; }
 }
 
 # ---------------------------------------------------------------------------
@@ -366,6 +371,7 @@ shift || true
 
 case "$cmd" in
   prime)
+    _hal_selftest --quiet || exit 1
     _hal_clip() {
       if [[ -n "${TERMUX_VERSION:-}" ]] || command -v termux-clipboard-set &>/dev/null; then
         termux-clipboard-set
@@ -411,9 +417,9 @@ case "$cmd" in
     ;;
   init)     do_init ;;
   selftest) _hal_selftest ;;
-  sync)     do_sync ;;
-  notes)    do_notes "${1:-}" ;;
-  tablets)  do_tablets "$@" ;;
+  sync)     _hal_selftest --quiet || exit 1; do_sync ;;
+  notes)    _hal_selftest --quiet || exit 1; do_notes "${1:-}" ;;
+  tablets)  _hal_selftest --quiet || exit 1; do_tablets "$@" ;;
   help|-h|--help) usage ;;
   *)
     echo "[HAL] Unknown command: $cmd" >&2
