@@ -136,8 +136,8 @@ termux-wake-lock && echo "[ok] wakelock" || echo "[warn] wakelock failed (not fa
 pkill -f xfce4-session 2>/dev/null; pkill -f barrierc 2>/dev/null; pkill -f termux-x11 2>/dev/null
 tmux -S "\$SOCK" kill-server 2>/dev/null
 sleep 1
-/system/bin/am start -n com.termux.x11/.MainActivity
-sleep 1
+# am start is blocked by Android 12+ cross-UID security — open Termux:X11 manually on the tablet.
+# /system/bin/am start -n com.termux.x11/.MainActivity
 TMPDIR=\$T termux-x11 :0 &
 sleep 3
 ls "\$T/.X11-unix/" 2>/dev/null && echo "[ok] X11 socket" || { echo "[error] X11 socket missing — is Termux:X11 APK installed and launched?"; exit 1; }
