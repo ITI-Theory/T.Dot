@@ -179,6 +179,48 @@ ENDSSH
 }
 
 # ---------------------------------------------------------------------------
+# Internal: start (or restart) the Barrier server in WSL2 tmux
+# ---------------------------------------------------------------------------
+
+_do_start_barrier_server() {
+  # Must run inside WSL2 (not Git Bash / Windows).
+  # Writes a launcher script to /tmp/run-barriers.sh to avoid tmux quoting hell.
+  local CONF='C:\Users\alist\prj\git\ITI-Theory\T.Dot\provisioning\tablets\Barrier-L.sgc'
+  local BIN='/mnt/c/Program Files/Barrier/barriers.exe'
+
+  # Kill any existing Windows-side barrier (needs elevation via UAC)
+  if tasklist.exe 2>/dev/null | grep -qi 'barriers.exe'; then
+    echo "[info] killing existing barriers.exe via UAC..."
+    powershell.exe -NoProfile -Command \
+      "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -Command Stop-Service Barrier -Force -ErrorAction SilentlyContinue; taskkill /IM barriers.exe /F; taskkill /IM barrierd.exe /F'" \
+      2>/dev/null || true
+    sleep 2
+  fi
+
+  # Kill any existing WSL2-owned session
+  tmux kill-session -t barriers 2>/dev/null || true
+  sleep 1
+
+  # Write launcher script (avoids quoting hell in tmux new-session)
+  cat > /tmp/run-barriers.sh << LAUNCHER
+#!/bin/bash
+exec '$BIN' --no-tray --disable-crypto -c '$CONF' --address 0.0.0.0:24800
+LAUNCHER
+  chmod +x /tmp/run-barriers.sh
+
+  tmux new-session -d -s barriers 'exec /tmp/run-barriers.sh'
+  sleep 3
+
+  if tmux has-session -t barriers 2>/dev/null; then
+    echo "[ok] barriers tmux session running (WSL2-owned)"
+    tmux capture-pane -t barriers -p | grep -v '^$' | tail -3
+  else
+    echo "[WARN] barriers session exited — check output:"
+    cat /tmp/barriers.log 2>/dev/null || true
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # do_tablets — public dispatcher (contract: pre → impl → post)
 # ---------------------------------------------------------------------------
 
@@ -214,6 +256,12 @@ do_tablets() {
       done
       echo ""
       echo "After tapping Allow × 2 per tablet, run: HAL tablets start"
+      ;;
+
+    barrier-server)
+      # {P: running in WSL2} start barriers.exe in WSL2 tmux session {Q: port 24800 listening}
+      echo "=== Starting Barrier server (WSL2-owned) ==="
+      _do_start_barrier_server
       ;;
 
     start)
@@ -311,6 +359,8 @@ HAL tablets <subcommand>
                  (one-time setup — sshd then auto-restarts on crash and Android boot)
                  Requires: Termux:Boot APK installed (F-Droid or GitHub sideload)
   sshd           Restart sshd on all tablets + post-check
+  barrier-server Start Barrier server in WSL2 tmux (headless, no GUI, no elevation)
+                 Run from: wsl -d Debian -- source T.Dot/bin/HAL0-tablets && _do_start_barrier_server
   start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)
                  Aborts if any tablet unreachable; post-check after
   help           This help
