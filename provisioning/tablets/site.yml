@@ -64,26 +64,31 @@
         update: true
       tags: dotfiles
 
-    - name: Symlink HAL into Termux PATH
-      ansible.builtin.file:
-        src: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL"
-        dest: "{{ ansible_env.HOME }}/.local/bin/HAL"
-        state: link
-        force: true
+    - name: Clone U.Dot (dotfiles)
+      ansible.builtin.git:
+        repo: https://github.com/ITI-Theory/U.Dot.git
+        dest: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot"
+        update: true
       tags: dotfiles
+
+    - name: Symlink HAL0 + HAL dispatcher + HAL1 into Termux PATH
+      ansible.builtin.shell: |
+        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL0 {{ ansible_env.PREFIX }}/bin/HAL0
+        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL  {{ ansible_env.PREFIX }}/bin/HAL
+        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot/bin/HAL1 {{ ansible_env.PREFIX }}/bin/HAL1
+      changed_when: false
+      tags: dotfiles
+      # Termux PATH = $PREFIX/bin only. Write access confirmed.
 
 - name: Arch (PRoot) layer — packages + Xpra + dotlinks
   hosts: tablets
   gather_facts: false
 
   vars:
-    # proot-distro uses ptrace to emulate a root environment — the container
-    # appears as uid 0/root but it is NOT real root. No kernel operations
-    # (mount, modprobe) are possible. File I/O and pacman work fine.
-    #
-    # We bind-mount the Termux home into proot at /termux-home so that files
-    # cloned in the Termux layer (U.Dot, T.Dot) are accessible inside Arch
-    # without re-cloning. Symlinks in /root/.config/ point into /termux-home/.
+    # proot-distro rootfs lives in Termux app data — appears as root inside.
+    # Termux home is bind-mounted at /termux-home (same --bind used here).
+    # Repos are cloned ONLY in Termux; all proot dotlinks point to /termux-home.
+    # Interactive sessions: proot-distro login archlinux --bind ~/:/termux-home
     arch: "proot-distro login archlinux --bind {{ ansible_env.HOME }}:/termux-home --"
 
   tasks:
@@ -130,29 +135,20 @@
         msg: "{{ inventory_hostname }} pubkey: {{ ssh_pubkey.stdout }}"
       tags: dotfiles
 
-    - name: Clone U.Dot inside Arch (SSH — add pubkey to GitHub first)
-      ansible.builtin.command: >
-        {{ arch }} bash -c "
-          mkdir -p /root/prj/git/ITI-Theory &&
-          [ -d /root/prj/git/ITI-Theory/U.Dot ] ||
-          GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no' git clone git@github.com:ITI-Theory/U.Dot.git /root/prj/git/ITI-Theory/U.Dot
-        "
-      changed_when: false
-      tags: dotfiles
-
-    - name: Link dotfiles from U.Dot into Arch home
+    - name: Link dotfiles into Arch home (all via /termux-home — single repo copy)
       ansible.builtin.command: >
         {{ arch }} bash -c "
           mkdir -p /root/.config/picom /root/.local/bin &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL /root/.local/bin/HAL
+          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
+          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
+          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
+          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL0 /root/.local/bin/HAL0 &&
+          ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL  /root/.local/bin/HAL  &&
+          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bin/HAL1 /root/.local/bin/HAL1
         "
       changed_when: false
       tags: dotfiles
-      # WM is XFCE4 (xfwm4). i3 is NOT used on tablets.
-      # Files source from /termux-home (Termux home bind-mount) — no re-clone needed.
+      # WM is XFCE4 (xfwm4) — i3 not used on tablets.
 
     - name: Verify Xpra is available inside Arch
       ansible.builtin.command: >
