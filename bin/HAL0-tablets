@@ -104,10 +104,11 @@ _tablet_check() {
     result=$(ssh $SSH_OPTS "$host" \
       'SOCK=/data/data/com.termux/files/usr/tmp/tmux.sock
        sshd_n=$(pgrep -c sshd 2>/dev/null || echo 0)
-       tmux_n=$(tmux -S "$SOCK" list-sessions 2>/dev/null | wc -l)
-       x11=$(ls /data/data/com.termux/files/usr/tmp/.X11-unix/X0 2>/dev/null && echo yes || echo no)
-       xfce=$(tmux -S "$SOCK" list-sessions 2>/dev/null | grep -c xfce || echo 0)
-       barrier=$(tmux -S "$SOCK" list-sessions 2>/dev/null | grep -c barrier || echo 0)
+       tmux_n=$(tmux -S "$SOCK" list-sessions 2>/dev/null | wc -l | tr -d " ")
+       x11=$( [[ -e /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ]] && echo yes || echo no )
+       sessions=$(tmux -S "$SOCK" list-sessions 2>/dev/null || true)
+       xfce=$(echo "$sessions" | grep -c xfce || true)
+       barrier=$(echo "$sessions" | grep -c barrier || true)
        echo "ssh=up sshd=$sshd_n tmux=$tmux_n X11=$x11 xfce=$xfce barrier=$barrier"' \
       2>/dev/null) || { echo "  $label ($host): SSH=DOWN"; all_ok=1; continue; }
     echo "  $label ($host): $result"
