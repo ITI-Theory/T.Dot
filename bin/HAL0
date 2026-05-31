@@ -327,28 +327,62 @@ _tablet_ssh() {
   ssh $SSH_OPTS "$host" "$@"
 }
 
+_tablet_check() {
+  # Print one status line per tablet. Returns 0 only if ALL are up.
+  local all_ok=0
+  for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
+    local label="${pair%%:*}" host="${pair#*:}"
+    local result
+    result=$(ssh $SSH_OPTS "$host" \
+      'SOCK=/data/data/com.termux/files/usr/tmp/tmux.sock
+       sshd_n=$(pgrep -c sshd 2>/dev/null || echo 0)
+       tmux_n=$(tmux -S "$SOCK" list-sessions 2>/dev/null | wc -l)
+       x11=$(ls /data/data/com.termux/files/usr/tmp/.X11-unix/X0 2>/dev/null && echo yes || echo no)
+       xfce=$(tmux -S "$SOCK" list-sessions 2>/dev/null | grep -c xfce || echo 0)
+       barrier=$(tmux -S "$SOCK" list-sessions 2>/dev/null | grep -c barrier || echo 0)
+       echo "ssh=up sshd=$sshd_n tmux=$tmux_n X11=$x11 xfce=$xfce barrier=$barrier"' \
+      2>/dev/null) || { echo "  $label ($host): SSH=DOWN"; all_ok=1; continue; }
+    echo "  $label ($host): $result"
+  done
+  return $all_ok
+}
+
 do_tablets() {
   local sub="${1:-help}"
   shift || true
   case "$sub" in
+    check)
+      echo "=== Tablet state ==="
+      _tablet_check
+      ;;
     battery)
-      echo "=== Triggering battery-optimization exemption dialog on all 3 tablets ==="
-      echo "(You must tap 'Allow' on each tablet screen when the dialog appears)"
-      for host in "$T1" "$T2" "$T3"; do
-        echo ""
-        echo "--- $host ---"
-        _tablet_ssh "$host" \
+      echo "=== PRE-CHECK ==="
+      _tablet_check || { echo "[WARN] Some tablets unreachable — battery dialog may not fire"; }
+      echo ""
+      echo "=== Sending battery-optimization exemption dialog to all tablets ==="
+      echo "(Tap 'Allow' × 2 on each tablet screen when dialogs appear)"
+      for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
+        local label="${pair%%:*}" host="${pair#*:}"
+        echo "  $label: "
+        ssh $SSH_OPTS "$host" \
           'am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux" && sleep 1 && am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux.x11"' \
-          && echo "[ok] dialog launched — tap Allow on tablet" \
-          || echo "[FAILED] ssh connect failed"
+          && echo "    [ok] dialogs launched — TAP ALLOW on tablet" \
+          || echo "    [FAILED] SSH connect failed"
       done
       echo ""
       echo "After tapping Allow × 2 per tablet, run: HAL tablets start"
       ;;
     start)
+      echo "=== PRE-CHECK ==="
+      _tablet_check
+      local rc=$?
+      if [[ $rc -ne 0 ]]; then
+        echo "[ABORT] One or more tablets unreachable. Run 'sshd' on each tablet first."
+        return 1
+      fi
+      echo ""
       local name="${1:-}"
       if [[ -n "$name" ]]; then
-        # Start a single named tablet
         case "$name" in
           1|Tablet1) _do_start_one "$T1" Tablet1 ;;
           2|Tablet2) _do_start_one "$T2" Tablet2 ;;
@@ -361,35 +395,39 @@ do_tablets() {
         _do_start_one "$T2" Tablet2 &
         _do_start_one "$T3" Tablet3 &
         wait
-        echo "=== all done ==="
       fi
+      echo ""
+      echo "=== POST-CHECK ==="
+      _tablet_check
       ;;
     sshd)
-      echo "=== Restarting sshd on all 3 tablets ==="
-      for host in "$T1" "$T2" "$T3"; do
-        echo "--- $host ---"
-        _tablet_ssh "$host" 'pkill sshd 2>/dev/null; sleep 1; sshd && echo "[ok] sshd started"' \
+      echo "=== Restarting sshd on all tablets ==="
+      for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
+        local label="${pair%%:*}" host="${pair#*:}"
+        echo -n "  $label: "
+        ssh $SSH_OPTS "$host" 'pkill sshd 2>/dev/null; sleep 1; sshd && echo "[ok]"' \
           || echo "[FAILED] connect failed"
       done
+      echo ""
+      echo "=== POST-CHECK ==="
+      _tablet_check
       ;;
     status)
-      echo "=== Tablet SSH status ==="
-      for host in "$T1" "$T2" "$T3"; do
-        echo -n "$host: "
-        _tablet_ssh "$host" \
-          'echo "up | sshd=$(pgrep sshd|wc -l) | tmux=$(tmux -S /data/data/com.termux/files/usr/tmp/tmux.sock list-sessions 2>/dev/null | wc -l) sessions"' \
-          || echo "DOWN (connection refused)"
-      done
+      echo "=== Tablet state ==="
+      _tablet_check
       ;;
     help|*)
       cat <<'TUSAGE'
 HAL tablets <subcommand>
 
+  check          Full state check: ssh/sshd/X11/xfce/barrier per tablet
+  status         Alias for check
   battery        Open battery-optimization exemption dialog on all tablets
-                 (you tap Allow × 2 per tablet, then run 'start')
-  sshd           Restart sshd on all tablets (when SSH is already up)
-  start [N]      Run start-desktop.sh on all tablets (or just 1/2/3)
-  status         Quick SSH ping — shows up/down + tmux session count
+                 (tap Allow × 2 per tablet, then run 'start')
+  sshd           Restart sshd on all tablets + post-check
+  start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)
+                 Runs pre-check first; aborts if any tablet is down
+                 Runs post-check after to confirm state
   help           Show this help
 TUSAGE
       ;;
@@ -483,10 +521,10 @@ Usage:
                            tablets   — tablet bootstrap sequence, Xpra, IPs, roles
                            dotfiles  — which repo is authoritative for which device
                            stack     — full device stack: WSL2 vs tablets, InputLeap, Xpra
+  HAL0 tablets check     Full state: ssh/sshd/X11/xfce/barrier per tablet
   HAL0 tablets battery   Open battery-optimization exemption dialog on all 3 tablets
-  HAL0 tablets start [N] Run start-desktop.sh on all tablets (or just 1/2/3)
-  HAL0 tablets sshd      Restart sshd on all 3 tablets
-  HAL0 tablets status    SSH ping — up/down + tmux session count
+  HAL0 tablets start [N] Start X11+XFCE4+Barrier (pre+post check, aborts if down)
+  HAL0 tablets sshd      Restart sshd on all 3 tablets + post-check
   HAL0 sync              Pull --ff-only on all known repos (pull-first discipline)
   HAL0 init              Link HAL0 + HAL dispatcher into ~/.local/bin
   HAL0 help              Show this help
