@@ -137,22 +137,10 @@
   tasks:
 
     - name: Pacman — update and install desktop + Xpra stack
-      ansible.builtin.command: >
-        {{ arch }} bash -c "
+      ansible.builtin.shell: |
+        proot-distro login archlinux --bind {{ t_home }}:/termux-home -- bash -c "
           pacman -Syu --noconfirm &&
-          pacman -S --noconfirm --needed
-            xorg-server
-            xfce4
-            xfce4-terminal
-            xpra
-            picom
-            conky
-            ttf-dejavu
-            ttf-liberation
-            openssh
-            git
-            python
-            python-pip
+          pacman -S --noconfirm --needed xorg-server xfce4 xfce4-terminal xpra picom conky ttf-dejavu ttf-liberation openssh git python python-pip
         "
       changed_when: false
       tags: arch_packages
@@ -212,23 +200,9 @@
   tasks:
 
     - name: Pacman — update and install desktop + Xpra stack
-      ansible.builtin.command: >
-        bash -c "
-          pacman -Syu --noconfirm &&
-          pacman -S --noconfirm --needed
-            xorg-server
-            xfce4
-            xfce4-terminal
-            xpra
-            picom
-            conky
-            ttf-dejavu
-            ttf-liberation
-            xdotool
-            git
-            python
-            python-pip
-        "
+      ansible.builtin.shell: |
+        pacman -Syu --noconfirm &&
+        pacman -S --noconfirm --needed xorg-server xfce4 xfce4-terminal xpra picom conky ttf-dejavu ttf-liberation xdotool git python python-pip
       changed_when: false
       tags: arch_packages
 
