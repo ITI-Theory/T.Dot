@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XLaunch 
+    WindowMode="Fullscreen" 
+    ClientMode="NoClient" 
+    LocalClient="False" 
+    Display="0" 
+    Clipboard="True" 
+    ClipboardPrimary="True" 
+    ExtraParams="-ac -multimonitors" 
+    Wgl="True" 
+    DisableAC="True" 
+/>
