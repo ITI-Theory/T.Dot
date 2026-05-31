@@ -219,27 +219,31 @@
         msg: "{{ inventory_hostname }}: {{ xpra_ver.stdout }}"
       tags: xpra
 
-- name: P14s WSL2 — same XFCE stack, direct install (no proot)
+- name: P14s WSL2 — XFCE stack, direct install (Debian)
   hosts: wsl2
   gather_facts: false
 
   tasks:
 
-    - name: Pacman — update and install desktop + Xpra stack
+    - name: Apt — update and install desktop + Xpra stack
       ansible.builtin.shell: |
-        pacman -Syu --noconfirm &&
-        pacman -S --noconfirm --needed xorg-server xfce4 xfce4-terminal xpra picom conky ttf-dejavu ttf-liberation xdotool git python python-pip
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends \
+          xfce4 xfce4-terminal xpra picom conky-all \
+          fonts-dejavu-core fonts-liberation \
+          dbus-x11 xdotool git python3 python3-pip
       changed_when: false
-      tags: arch_packages
+      tags: deb_packages
 
     - name: Link dotfiles from U.Dot into WSL2 home
-      ansible.builtin.command: >
-        bash -c "
-          mkdir -p /root/.config/picom /root/.local/bin &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
-          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
-          ln -sfn /root/prj/git/ITI-Theory/T.Dot/bin/HAL /root/.local/bin/HAL
-        "
+      ansible.builtin.shell: |
+        mkdir -p "$HOME/.config/picom" "$HOME/.local/bin"
+        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/U.Dot/picom/picom.conf "$HOME/.config/picom/picom.conf"
+        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc "$HOME/.bashrc"
+        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile "$HOME/.bash_profile"
+        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/T.Dot/bin/HAL0 "$HOME/.local/bin/HAL0"
+        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/T.Dot/bin/HAL  "$HOME/.local/bin/HAL"
+        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/U.Dot/bin/HAL1 "$HOME/.local/bin/HAL1"
       changed_when: false
       tags: dotfiles
