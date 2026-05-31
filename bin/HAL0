@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve the real path of this script, following symlinks
-_hal0_self="${BASH_SOURCE[0]}"
-[[ -L "$_hal0_self" ]] && _hal0_self="$(readlink -f -- "$_hal0_self")"
-SCRIPT_DIR="$(cd -- "$(dirname -- "$_hal0_self")" && pwd)"
-unset _hal0_self
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 # T.Dot lives inside ITI-Theory/ — sibling repos are one level up
 ITI="$(cd -- "$REPO_ROOT/.." && pwd)"
@@ -24,9 +20,15 @@ banner()  { echo "==============================================================
 
 do_init() {
   mkdir -p "$HOME/.local/bin"
-  ln -sfn "$SCRIPT_DIR/HAL0" "$HOME/.local/bin/HAL0"
-  ln -sfn "$SCRIPT_DIR/HAL"  "$HOME/.local/bin/HAL"
-  echo "[HAL0] init complete — HAL0 and HAL dispatcher linked to ~/.local/bin"
+  # Write a forwarding wrapper — not a symlink (Git Bash on Windows copies, not links).
+  # The wrapper calls the real script so SCRIPT_DIR always resolves to the repo bin/.
+  for script in HAL0 HAL; do
+    local src="$SCRIPT_DIR/$script"
+    local dst="$HOME/.local/bin/$script"
+    printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$src" > "$dst"
+    chmod +x "$dst"
+  done
+  echo "[HAL0] init complete — HAL0 and HAL dispatcher installed to ~/.local/bin"
   echo "[HAL0] Ensure ~/.local/bin is in PATH (add to ~/.bashrc if needed)"
 }
 
