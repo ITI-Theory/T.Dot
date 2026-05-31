@@ -15,36 +15,14 @@ section() { echo ""; echo "--- $* ---"; }
 banner()  { echo "================================================================"; echo "=== $*"; echo "================================================================"; }
 
 # ---------------------------------------------------------------------------
-# HAL init — symlink HAL into PATH, then wire dotfiles if U.Dot is present
+# HAL init — symlink HAL into PATH
 # ---------------------------------------------------------------------------
 
 do_init() {
   mkdir -p "$HOME/.local/bin"
   ln -sfn "$SCRIPT_DIR/HAL" "$HOME/.local/bin/HAL"
   echo "[HAL] init complete — HAL linked to ~/.local/bin/HAL"
-  if [[ -d "$ITI/U.Dot" ]]; then
-    do_dotfiles
-  else
-    echo "[HAL] U.Dot not found — after cloning it, run: HAL dotfiles"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# HAL dotfiles — symlink U.Dot configs into home
-# ---------------------------------------------------------------------------
-
-do_dotfiles() {
-  local udot="$ITI/U.Dot"
-  if [[ ! -d "$udot" ]]; then
-    echo "[HAL] U.Dot not found at $udot — clone it first, then re-run" >&2
-    return 1
-  fi
-  mkdir -p "$HOME/.config/picom" "$HOME/.config/i3" "$HOME/.local/bin"
-  ln -sfn "$udot/picom/picom.conf"    "$HOME/.config/picom/picom.conf"
-  ln -sfn "$udot/bash/ubuntu/bashrc"  "$HOME/.bashrc"
-  ln -sfn "$udot/bash/ubuntu/profile" "$HOME/.bash_profile"
-  [[ -f "$udot/i3/config" ]] && ln -sfn "$udot/i3/config" "$HOME/.config/i3/config"
-  echo "[HAL] dotfiles linked from $udot"
+  echo "[HAL] Ensure ~/.local/bin is in PATH (add to ~/.bashrc if needed)"
 }
 
 # ---------------------------------------------------------------------------
@@ -303,6 +281,10 @@ _notes_stack() {
   IPs:     .207 (u0_a304) | .219 (u0_a360) | .110 (u0_a297)
   Key apps:
     Termux-X11       — display server (preferred over VNC — no compression)
+                       Termux-side companion: installed by Ansible (termux-x11-nightly)
+                       Android APK: manual sideload required
+                         → https://github.com/termux/termux-x11/releases
+                         Download .apk, install on tablet, launch before starting X apps
     xpra client      — attach to sessions running on P14s WSL2
     InputLeap client — shares P14s keyboard/mouse onto tablet screen
     Python/OSC       — receives field state from server
@@ -386,8 +368,7 @@ Usage:
                            dotfiles  — which repo is authoritative for which device
                            stack     — full device stack: WSL2 vs tablets, InputLeap, Xpra
   HAL sync               Pull --ff-only on all known repos (pull-first discipline)
-  HAL init               Symlink HAL into ~/.local/bin/HAL; wire U.Dot dotfiles if present
-  HAL dotfiles           (Re-)link U.Dot configs: picom.conf, bashrc, bash_profile, i3/config
+  HAL init               Symlink HAL into ~/.local/bin/HAL
   HAL help               Show this help
 
 USAGE
@@ -441,10 +422,9 @@ case "$cmd" in
       _run_prime
     fi
     ;;
-  init)     do_init ;;
-  dotfiles) do_dotfiles ;;
-  sync)     do_sync ;;
-  notes)    do_notes "${1:-}" ;;
+  init)  do_init ;;
+  sync)  do_sync ;;
+  notes) do_notes "${1:-}" ;;
   help|-h|--help) usage ;;
   *)
     echo "[HAL] Unknown command: $cmd" >&2
