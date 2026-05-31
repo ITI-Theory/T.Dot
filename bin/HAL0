@@ -314,6 +314,97 @@ STACK
 }
 
 # ---------------------------------------------------------------------------
+# HAL tablets — remote tablet management
+# ---------------------------------------------------------------------------
+
+T1="u0_a304@10.133.134.207"
+T2="u0_a360@10.133.134.219"
+T3="u0_a297@10.133.134.110"
+SSH_OPTS="-p 8022 -o ConnectTimeout=6 -o BatchMode=yes"
+
+_tablet_ssh() {
+  local host="$1"; shift
+  ssh $SSH_OPTS "$host" "$@"
+}
+
+do_tablets() {
+  local sub="${1:-help}"
+  shift || true
+  case "$sub" in
+    battery)
+      echo "=== Triggering battery-optimization exemption dialog on all 3 tablets ==="
+      echo "(You must tap 'Allow' on each tablet screen when the dialog appears)"
+      for host in "$T1" "$T2" "$T3"; do
+        echo ""
+        echo "--- $host ---"
+        _tablet_ssh "$host" \
+          'am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d package:com.termux && sleep 1 && am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d package:com.termux.x11' \
+          && echo "[ok] dialog launched — tap Allow on tablet" \
+          || echo "[FAILED] ssh connect failed"
+      done
+      echo ""
+      echo "After tapping Allow × 2 per tablet, run: HAL tablets start"
+      ;;
+    start)
+      local name="${1:-}"
+      if [[ -n "$name" ]]; then
+        # Start a single named tablet
+        case "$name" in
+          1|Tablet1) _do_start_one "$T1" Tablet1 ;;
+          2|Tablet2) _do_start_one "$T2" Tablet2 ;;
+          3|Tablet3) _do_start_one "$T3" Tablet3 ;;
+          *) echo "[HAL] Unknown tablet: $name (use 1/2/3 or Tablet1/Tablet2/Tablet3)" ;;
+        esac
+      else
+        echo "=== Starting desktops on all 3 tablets in parallel ==="
+        _do_start_one "$T1" Tablet1 &
+        _do_start_one "$T2" Tablet2 &
+        _do_start_one "$T3" Tablet3 &
+        wait
+        echo "=== all done ==="
+      fi
+      ;;
+    sshd)
+      echo "=== Restarting sshd on all 3 tablets ==="
+      for host in "$T1" "$T2" "$T3"; do
+        echo "--- $host ---"
+        _tablet_ssh "$host" 'pkill sshd 2>/dev/null; sleep 1; sshd && echo "[ok] sshd started"' \
+          || echo "[FAILED] connect failed"
+      done
+      ;;
+    status)
+      echo "=== Tablet SSH status ==="
+      for host in "$T1" "$T2" "$T3"; do
+        echo -n "$host: "
+        _tablet_ssh "$host" \
+          'echo "up | sshd=$(pgrep sshd|wc -l) | tmux=$(tmux -S /data/data/com.termux/files/usr/tmp/tmux.sock list-sessions 2>/dev/null | wc -l) sessions"' \
+          || echo "DOWN (connection refused)"
+      done
+      ;;
+    help|*)
+      cat <<'TUSAGE'
+HAL tablets <subcommand>
+
+  battery        Open battery-optimization exemption dialog on all tablets
+                 (you tap Allow × 2 per tablet, then run 'start')
+  sshd           Restart sshd on all tablets (when SSH is already up)
+  start [N]      Run start-desktop.sh on all tablets (or just 1/2/3)
+  status         Quick SSH ping — shows up/down + tmux session count
+  help           Show this help
+TUSAGE
+      ;;
+  esac
+}
+
+_do_start_one() {
+  local host="$1" name="$2"
+  echo "--- $name ($host) ---"
+  _tablet_ssh "$host" "bash ~/start-desktop.sh $name" \
+    && echo "[$name] done" \
+    || echo "[$name] FAILED — is sshd running?"
+}
+
+# ---------------------------------------------------------------------------
 # HAL sync — pull-first across all known repos
 # ---------------------------------------------------------------------------
 
@@ -367,6 +458,10 @@ Usage:
                            tablets   — tablet bootstrap sequence, Xpra, IPs, roles
                            dotfiles  — which repo is authoritative for which device
                            stack     — full device stack: WSL2 vs tablets, InputLeap, Xpra
+  HAL0 tablets battery   Open battery-optimization exemption dialog on all 3 tablets
+  HAL0 tablets start [N] Run start-desktop.sh on all tablets (or just 1/2/3)
+  HAL0 tablets sshd      Restart sshd on all 3 tablets
+  HAL0 tablets status    SSH ping — up/down + tmux session count
   HAL0 sync              Pull --ff-only on all known repos (pull-first discipline)
   HAL0 init              Link HAL0 + HAL dispatcher into ~/.local/bin
   HAL0 help              Show this help
@@ -422,9 +517,10 @@ case "$cmd" in
       _run_prime
     fi
     ;;
-  init)  do_init ;;
-  sync)  do_sync ;;
-  notes) do_notes "${1:-}" ;;
+  init)    do_init ;;
+  sync)    do_sync ;;
+  notes)   do_notes "${1:-}" ;;
+  tablets) do_tablets "$@" ;;
   help|-h|--help) usage ;;
   *)
     echo "[HAL] Unknown command: $cmd" >&2
