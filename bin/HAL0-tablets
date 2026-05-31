@@ -110,7 +110,8 @@ _tablet_check() {
        xfce=$(echo "$sessions" | grep -c xfce || true)
        barrier_sess=$(echo "$sessions" | grep -c barrier || true)
        barrierc_n=$(pgrep -c barrierc 2>/dev/null || echo 0)
-       echo "ssh=up sshd=$sshd_n tmux=$tmux_n X11=$x11 xfce=$xfce barrier_sess=$barrier_sess barrierc=$barrierc_n"' \
+       boot=$( [[ -x ~/.termux/boot/start-services.sh ]] && echo yes || echo "NO-run:boot-install" )
+       echo "ssh=up sshd=$sshd_n tmux=$tmux_n X11=$x11 xfce=$xfce barrier_sess=$barrier_sess barrierc=$barrierc_n boot=$boot"' \
       2>/dev/null) || { echo "  $label ($host): SSH=DOWN"; all_ok=1; continue; }
     echo "  $label ($host): $result"
   done
