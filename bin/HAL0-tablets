@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# HAL-tablets — tablet implementation module
+# HAL0-tablets — T-lane tablet implementation module
 # Called via HAL0 dispatch. Never invoke directly.
+# HAL1-tablets (if it ever exists) should source this first, then override.
 # Contract (pre/post) is enforced by do_tablets() below.
 #
 # Defines: T1 T2 T3 SSH_OPTS
@@ -157,19 +158,23 @@ ENDSSH
 do_tablets() {
   local sub="${1:-help}"
   shift || true
+
+  # Always show current state before doing anything (except help)
+  local pre_ok=0
+  if [[ "$sub" != "help" ]]; then
+    echo "=== State ==="
+    _tablet_check || pre_ok=$?
+    echo ""
+  fi
+
   case "$sub" in
 
     check|status)
-      # {P: always} check state {Q: state printed}
-      echo "=== Tablet state ==="
-      _tablet_check
+      # State already printed above — nothing more to do
       ;;
 
     battery)
       # {P: tablets reachable} send dialog {Q: dialog shown on tablet screen}
-      echo "=== PRE-CHECK ==="
-      _tablet_check || echo "[WARN] Some tablets unreachable — battery dialog may not fire"
-      echo ""
       echo "=== Sending battery-optimization exemption dialogs ==="
       echo "(Tap 'Allow' × 2 on each tablet screen when dialogs appear)"
       for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
@@ -186,15 +191,11 @@ do_tablets() {
 
     start)
       # {P: all tablets ssh=up} start X11+XFCE4+Barrier {Q: xfce=1 barrier=1 per tablet}
-      echo "=== PRE-CHECK ==="
-      _tablet_check
-      local rc=$?
-      if [[ $rc -ne 0 ]]; then
+      if [[ $pre_ok -ne 0 ]]; then
         echo "[ABORT] One or more tablets unreachable — cannot start."
-        echo "        Is sshd running? Open Termux on each tablet and run: sshd"
+        echo "        Open Termux on each tablet and run: sshd"
         return 1
       fi
-      echo ""
       local name="${1:-}"
       if [[ -n "$name" ]]; then
         case "$name" in
@@ -211,7 +212,7 @@ do_tablets() {
         wait
       fi
       echo ""
-      echo "=== POST-CHECK ==="
+      echo "=== Post-check ==="
       _tablet_check
       ;;
 
@@ -225,7 +226,7 @@ do_tablets() {
           || echo "[FAILED] connect failed"
       done
       echo ""
-      echo "=== POST-CHECK ==="
+      echo "=== Post-check ==="
       _tablet_check
       ;;
 
@@ -233,13 +234,14 @@ do_tablets() {
       cat <<'TUSAGE'
 HAL tablets <subcommand>
 
-  check          Full state: ssh/sshd/X11/xfce/barrier per tablet (alias: status)
+  Every subcommand prints current state (ssh/sshd/X11/xfce/barrier) first.
+
+  check          Show state (alias: status)
   battery        Send battery-optimization exemption dialog to all tablets
                  (tap Allow × 2 per tablet, then run 'start')
   sshd           Restart sshd on all tablets + post-check
   start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)
-                 Pre-check: aborts if any tablet unreachable
-                 Post-check: confirms xfce + barrier sessions survived
+                 Aborts if any tablet unreachable; post-check after
   help           This help
 TUSAGE
       ;;
