@@ -85,12 +85,12 @@
   gather_facts: false
 
   vars:
-    # proot-distro uses ptrace to emulate a fake-root environment — uid 0 inside
-    # proot, but NOT real root. No kernel operations (mount, modprobe).
-    #
-    # T.Dot and U.Dot are cloned ONLY in Termux ($HOME/prj/git/ITI-Theory/).
+    # proot-distro is single-user (root). Its rootfs lives inside Termux app data:
+    #   ~/.local/share/proot-distro/installed-rootfs/archlinux/
+    # Termux cannot access the real Android / — it is sandboxed.
+    # Repos are cloned ONLY in Termux ($HOME/prj/git/ITI-Theory/).
     # The Termux home is bind-mounted into proot at /termux-home.
-    # ALL dotfile symlinks inside proot point into /termux-home/ — no repos
+    # ALL dotfile symlinks inside proot point to /termux-home/ — no repos
     # are cloned inside proot. Interactive sessions must always use --bind:
     #   proot-distro login archlinux --bind ~/:/termux-home
     arch: "proot-distro login archlinux --bind {{ ansible_env.HOME }}:/termux-home --"
@@ -139,7 +139,7 @@
         msg: "{{ inventory_hostname }} pubkey: {{ ssh_pubkey.stdout }}"
       tags: dotfiles
 
-    - name: Link dotfiles into Arch home (all via /termux-home bind-mount)
+    - name: Link dotfiles into Arch home (all via /termux-home)
       ansible.builtin.command: >
         {{ arch }} bash -c "
           mkdir -p /root/.config/picom /root/.local/bin &&
@@ -153,7 +153,7 @@
       changed_when: false
       tags: dotfiles
       # Single source of truth: repos live in Termux, mounted at /termux-home.
-      # No git clones inside proot. WM is XFCE4 (xfwm4) — i3 not used on tablets.
+      # No git inside proot. WM is XFCE4 (xfwm4) — i3 not used on tablets.
 
     - name: Verify Xpra is available inside Arch
       ansible.builtin.command: >
