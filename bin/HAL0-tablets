@@ -17,7 +17,7 @@
 T1="u0_a304@10.133.134.207"
 T2="u0_a360@10.133.134.219"
 T3="u0_a297@10.133.134.110"
-SSH_OPTS="-p 8022 -o ConnectTimeout=6 -o BatchMode=yes"
+SSH_OPTS="-p 8022 -o ConnectTimeout=6 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
 
 # ---------------------------------------------------------------------------
 # Notes pack (used by: HAL prime tablets)
