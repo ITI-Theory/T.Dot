@@ -236,14 +236,66 @@
       changed_when: false
       tags: deb_packages
 
-    - name: Link dotfiles from U.Dot into WSL2 home
+    - name: Ensure repo directory structure in WSL2 Linux FS
+      ansible.builtin.file:
+        path: "{{ ansible_env.HOME }}/prj/git/ITI-Theory"
+        state: directory
+        mode: '0755'
+      tags: [dotfiles, keys]
+
+    - name: Clone T.Dot (HAL) into WSL2 Linux FS
+      ansible.builtin.git:
+        repo: https://github.com/ITI-Theory/T.Dot.git
+        dest: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot"
+        update: true
+        force: true
+      tags: dotfiles
+
+    - name: Generate WSL2 SSH key (for GitHub deploy key)
+      ansible.builtin.shell: |
+        mkdir -p ~/.ssh
+        if [ ! -f ~/.ssh/id_ed25519 ]; then
+          ssh-keygen -t ed25519 -C "wsl2-debian-p14s" -f ~/.ssh/id_ed25519 -N ''
+        fi
+      changed_when: false
+      tags: [dotfiles, keys]
+
+    - name: Trust github.com host key in WSL2
+      ansible.builtin.shell: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+        sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+      changed_when: false
+      tags: [dotfiles, keys]
+
+    - name: Display WSL2 SSH public key (add as GitHub deploy key for U.Dot)
+      ansible.builtin.command: cat ~/.ssh/id_ed25519.pub
+      register: _wsl2_pubkey
+      changed_when: false
+      tags: [dotfiles, keys]
+
+    - name: Print WSL2 pubkey
+      ansible.builtin.debug:
+        msg: "DEPLOY KEY wsl2: {{ _wsl2_pubkey.stdout }}"
+      tags: [dotfiles, keys]
+
+    - name: Clone U.Dot (dotfiles) into WSL2 Linux FS via SSH deploy key
+      ansible.builtin.git:
+        repo: git@github.com:ITI-Theory/U.Dot.git
+        dest: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot"
+        update: true
+        force: true
+        accept_hostkey: true
+      tags: dotfiles
+
+    - name: Link dotfiles from WSL2 Linux FS repos (no /mnt/c)
       ansible.builtin.shell: |
         mkdir -p "$HOME/.config/picom" "$HOME/.local/bin"
-        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/U.Dot/picom/picom.conf "$HOME/.config/picom/picom.conf"
-        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc "$HOME/.bashrc"
-        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile "$HOME/.bash_profile"
-        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/T.Dot/bin/HAL0 "$HOME/.local/bin/HAL0"
-        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/T.Dot/bin/HAL  "$HOME/.local/bin/HAL"
-        ln -sfn /mnt/c/Users/alist/prj/git/ITI-Theory/U.Dot/bin/HAL1 "$HOME/.local/bin/HAL1"
+        ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/picom/picom.conf" "$HOME/.config/picom/picom.conf"
+        ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc"  "$HOME/.bashrc"
+        ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile" "$HOME/.bash_profile"
+        ln -sfn "$HOME/prj/git/ITI-Theory/T.Dot/bin/HAL0" "$HOME/.local/bin/HAL0"
+        ln -sfn "$HOME/prj/git/ITI-Theory/T.Dot/bin/HAL"  "$HOME/.local/bin/HAL"
+        ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/bin/HAL1" "$HOME/.local/bin/HAL1"
       changed_when: false
       tags: dotfiles
