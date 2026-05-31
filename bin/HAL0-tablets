@@ -158,16 +158,14 @@ fi
 if \$x11_live; then
   echo "[ok] X11 socket already up — skipping termux-x11 restart"
 else
-  echo "[info] X11 socket missing or stale — restarting termux-x11"
+  echo "[info] X11 socket missing or stale — restarting termux-x11 server"
   pkill -f termux-x11 2>/dev/null
   rm -f "\$T/.X11-unix/X0"
-  sleep 1
-  /system/bin/am start -n com.termux.x11/.MainActivity > /dev/null 2>&1 &
-  disown
   sleep 1
   TMPDIR=\$T termux-x11 :0 &
   disown
   sleep 4
+  echo "[note] Tap the Termux:X11 app icon on the tablet screen to see the desktop"
 fi
 if [[ -S "\$T/.X11-unix/X0" ]]; then
   echo "[ok] X11 socket"
