@@ -60,12 +60,20 @@
       # Install the .apk on the tablet, then launch it before running
       # startxfce4 (or any X app) inside proot.
 
-    - name: Check if Debian already installed via proot-distro
-      ansible.builtin.shell: proot-distro list 2>&1 | grep -q 'debian' && echo present || echo absent
+    - name: Check if Debian container is installed and functional
+      ansible.builtin.shell: proot-distro login debian -- true 2>/dev/null && echo present || echo absent
       register: proot_debian_check
       changed_when: false
+      # NOTE: proot-distro list shows ALL distros (installed + available), so
+      # grep 'debian' always matches. Login probe is the only reliable check.
 
-    - name: Install Debian bookworm via proot-distro
+    - name: Remove stale proot container (ubuntu/arch/broken debian)
+      ansible.builtin.command: proot-distro remove debian
+      when: "proot_debian_check.stdout == 'absent'"
+      ignore_errors: true
+      # Silently fails if no container named 'debian' exists — that's fine.
+
+    - name: Install Debian bookworm via proot-distro (clean)
       ansible.builtin.command: proot-distro install debian:bookworm --name debian
       when: "proot_debian_check.stdout == 'absent'"
 
