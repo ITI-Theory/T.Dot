@@ -150,3 +150,42 @@
       ansible.builtin.debug:
         msg: "{{ inventory_hostname }}: {{ xpra_ver.stdout }}"
       tags: xpra
+
+- name: P14s WSL2 — same XFCE stack, direct install (no proot)
+  hosts: wsl2
+  gather_facts: false
+
+  tasks:
+
+    - name: Pacman — update and install desktop + Xpra stack
+      ansible.builtin.command: >
+        bash -c "
+          pacman -Syu --noconfirm &&
+          pacman -S --noconfirm --needed
+            xorg-server
+            xfce4
+            xfce4-terminal
+            xpra
+            picom
+            conky
+            ttf-dejavu
+            ttf-liberation
+            xdotool
+            git
+            python
+            python-pip
+        "
+      changed_when: false
+      tags: arch_packages
+
+    - name: Link dotfiles from U.Dot into WSL2 home
+      ansible.builtin.command: >
+        bash -c "
+          mkdir -p /root/.config/picom /root/.local/bin &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
+          ln -sfn /root/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
+          ln -sfn /root/prj/git/ITI-Theory/T.Dot/bin/HAL /root/.local/bin/HAL
+        "
+      changed_when: false
+      tags: dotfiles
