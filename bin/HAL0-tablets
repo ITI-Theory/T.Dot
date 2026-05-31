@@ -63,7 +63,7 @@ pack_tablets() {
 
 ### Termux:X11
   Android APK — sideload from https://github.com/termux/termux-x11/releases
-  Launch: am start -n com.termux.x11/.MainActivity then TMPDIR=$T termux-x11 :0 &
+  Launch: /system/bin/am start -n com.termux.x11/.MainActivity then TMPDIR=$T termux-x11 :0 &
   Socket: /data/data/com.termux/files/usr/tmp/.X11-unix/X0
   xkbcomp warnings: harmless, ignore them
 
@@ -136,7 +136,7 @@ termux-wake-lock && echo "[ok] wakelock" || echo "[warn] wakelock failed (not fa
 pkill -f xfce4-session 2>/dev/null; pkill -f barrierc 2>/dev/null; pkill -f termux-x11 2>/dev/null
 tmux -S "\$SOCK" kill-server 2>/dev/null
 sleep 1
-am start -n com.termux.x11/.MainActivity
+/system/bin/am start -n com.termux.x11/.MainActivity
 sleep 1
 TMPDIR=\$T termux-x11 :0 &
 sleep 3
@@ -190,7 +190,7 @@ do_tablets() {
         local label="${pair%%:*}" host="${pair#*:}"
         printf "  %s: " "$label"
         ssh $SSH_OPTS "$host" \
-          'am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux" && sleep 1 && am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux.x11"' \
+          '/system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux" && sleep 1 && /system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux.x11"' \
           && echo "[ok] dialogs launched — TAP ALLOW on tablet" \
           || echo "[FAILED] SSH connect failed"
       done
