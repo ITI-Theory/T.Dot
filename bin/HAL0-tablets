@@ -252,19 +252,23 @@ do_tablets() {
       ;;
 
     battery)
-      # {P: tablets reachable} send dialog {Q: dialog shown on tablet screen}
-      echo "=== Sending battery-optimization exemption dialogs ==="
-      echo "(Tap 'Allow' × 2 on each tablet screen when dialogs appear)"
+      # Android 12+ blocks am start from SSH (UID mismatch) — must be done locally on each tablet.
+      echo "=== Battery optimization exemption — MANUAL STEP REQUIRED ==="
+      echo ""
+      echo "On each tablet, open Termux locally and run:"
+      echo "  /system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d 'package:com.termux'"
+      echo "  /system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d 'package:com.termux.x11'"
+      echo ""
+      echo "Or: Settings → Apps → Termux → Battery → Unrestricted (repeat for Termux:X11)"
+      echo ""
+      echo "Current whitelist status:"
       for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
         local label="${pair%%:*}" host="${pair#*:}"
         printf "  %s: " "$label"
         ssh $SSH_OPTS "$host" \
-          '/system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux" && sleep 1 && /system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d "package:com.termux.x11"' \
-          && echo "[ok] dialogs launched — TAP ALLOW on tablet" \
-          || echo "[FAILED] SSH connect failed"
+          'dumpsys deviceidle whitelist 2>/dev/null | grep -E "termux" || echo "NOT whitelisted"' \
+          2>/dev/null || echo "[SSH DOWN]"
       done
-      echo ""
-      echo "After tapping Allow × 2 per tablet, run: HAL tablets start"
       ;;
 
     barrier-server)
