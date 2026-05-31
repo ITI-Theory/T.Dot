@@ -265,10 +265,9 @@ sv-enable sshd
 sv up sshd 2>/dev/null || true
 mkdir -p ~/.termux/boot
 cat > ~/.termux/boot/start-services.sh << 'BOOTEOF'
-#!/data/data/com.termux/files/usr/bin/bash
+#!/data/data/com.termux/files/usr/bin/sh
 termux-wake-lock
-. $PREFIX/etc/profile.d/termux-services.sh
-runsvdir $SVDIR &
+. $PREFIX/etc/profile
 BOOTEOF
 chmod +x ~/.termux/boot/start-services.sh
 echo "[ok] termux-services installed, sshd enabled under runit"
