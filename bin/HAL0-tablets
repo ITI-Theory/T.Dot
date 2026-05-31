@@ -258,6 +258,8 @@ else
   echo "        Then re-run: HAL tablets boot-install"
   exit 1
 fi
+# Fix any half-configured packages before installing (avoids interactive conffile prompts)
+DEBIAN_FRONTEND=noninteractive dpkg --configure -a 2>/dev/null || true
 pkg install -y termux-services
 sv-enable sshd
 sv up sshd 2>/dev/null || true
