@@ -1,3 +1,5 @@
 * text=auto
 bin/HAL text eol=lf
+bin/HAL0 text eol=lf
+bin/HAL0-tablets text eol=lf
 bin/HAL.bat text eol=crlf
