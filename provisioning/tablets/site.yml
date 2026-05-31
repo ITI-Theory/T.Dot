@@ -20,6 +20,16 @@
     - name: Ping check
       ansible.builtin.ping:
 
+    - name: Capture HOME and PREFIX
+      ansible.builtin.shell: "printf 'HOME=%s PREFIX=%s' \"$HOME\" \"$PREFIX\""
+      register: _env_raw
+      changed_when: false
+
+    - name: Set HOME and PREFIX facts (persist across plays)
+      ansible.builtin.set_fact:
+        t_home: "{{ _env_raw.stdout | regex_search('HOME=([^ ]+)', '\\1') | first }}"
+        t_prefix: "{{ _env_raw.stdout | regex_search('PREFIX=([^ ]+)', '\\1') | first }}"
+
     - name: Update Termux package index
       ansible.builtin.command: pkg update -y
       changed_when: false
@@ -60,22 +70,22 @@
     - name: Clone T.Dot (HAL)
       ansible.builtin.git:
         repo: https://github.com/ITI-Theory/T.Dot.git
-        dest: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot"
+        dest: "{{ t_home }}/prj/git/ITI-Theory/T.Dot"
         update: true
       tags: dotfiles
 
     - name: Clone U.Dot (dotfiles)
       ansible.builtin.git:
         repo: https://github.com/ITI-Theory/U.Dot.git
-        dest: "{{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot"
+        dest: "{{ t_home }}/prj/git/ITI-Theory/U.Dot"
         update: true
       tags: dotfiles
 
     - name: Symlink HAL0 + HAL dispatcher + HAL1 into Termux PATH
       ansible.builtin.shell: |
-        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL0 {{ ansible_env.PREFIX }}/bin/HAL0
-        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL  {{ ansible_env.PREFIX }}/bin/HAL
-        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot/bin/HAL1 {{ ansible_env.PREFIX }}/bin/HAL1
+        ln -sfn {{ t_home }}/prj/git/ITI-Theory/T.Dot/bin/HAL0 {{ t_prefix }}/bin/HAL0
+        ln -sfn {{ t_home }}/prj/git/ITI-Theory/T.Dot/bin/HAL  {{ t_prefix }}/bin/HAL
+        ln -sfn {{ t_home }}/prj/git/ITI-Theory/U.Dot/bin/HAL1 {{ t_prefix }}/bin/HAL1
       changed_when: false
       tags: dotfiles
       # Termux PATH = $PREFIX/bin only. Write access confirmed.
@@ -89,7 +99,7 @@
     # Termux home is bind-mounted at /termux-home (same --bind used here).
     # Repos are cloned ONLY in Termux; all proot dotlinks point to /termux-home.
     # Interactive sessions: proot-distro login archlinux --bind ~/:/termux-home
-    arch: "proot-distro login archlinux --bind {{ ansible_env.HOME }}:/termux-home --"
+    arch: "proot-distro login archlinux --bind {{ t_home }}:/termux-home --"
 
   tasks:
 
