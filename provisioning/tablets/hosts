@@ -19,7 +19,7 @@ ansible_become=false
 # Use proot-distro for root-requiring work inside the Debian container.
 
 [wsl2]
-p14s ansible_connection=local ansible_python_interpreter=/usr/bin/python
+p14s ansible_connection=local ansible_python_interpreter=/usr/bin/python3
 
 [wsl2:vars]
 ansible_become=false
