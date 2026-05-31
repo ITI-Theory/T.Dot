@@ -60,14 +60,14 @@
       # Install the .apk on the tablet, then launch it before running
       # startxfce4 (or any X app) inside proot.
 
-    - name: Check if Arch already installed via proot-distro
-      ansible.builtin.shell: proot-distro list 2>&1 | grep -q 'archlinux' && echo present || echo absent
-      register: proot_arch_check
+    - name: Check if Debian already installed via proot-distro
+      ansible.builtin.shell: proot-distro list 2>&1 | grep -q 'debian' && echo present || echo absent
+      register: proot_debian_check
       changed_when: false
 
-    - name: Install Arch Linux ARM via proot-distro
-      ansible.builtin.command: proot-distro install danhunsaker/archlinuxarm:latest --name archlinux
-      when: "proot_arch_check.stdout == 'absent'"
+    - name: Install Debian bookworm via proot-distro
+      ansible.builtin.command: proot-distro install debian:bookworm --name debian
+      when: "proot_debian_check.stdout == 'absent'"
 
     - name: Clone T.Dot (HAL)
       ansible.builtin.git:
@@ -123,7 +123,7 @@
       tags: dotfiles
       # Termux PATH = $PREFIX/bin only. Write access confirmed.
 
-- name: Arch (PRoot) layer — packages + Xpra + dotlinks
+- name: Debian (PRoot) layer — packages + Xpra + dotlinks
   hosts: tablets
   gather_facts: false
 
@@ -131,44 +131,27 @@
     # proot-distro rootfs lives in Termux app data — appears as root inside.
     # Termux home is bind-mounted at /termux-home (same --bind used here).
     # Repos are cloned ONLY in Termux; all proot dotlinks point to /termux-home.
-    # Interactive sessions: proot-distro login archlinux --bind ~/:/termux-home
-    arch: "proot-distro login archlinux --bind {{ t_home }}:/termux-home --"
+    # Interactive sessions: proot-distro login debian --bind ~/:/termux-home
+    deb: "proot-distro login debian --bind {{ t_home }}:/termux-home --"
 
   tasks:
 
-    - name: Pacman — update and install desktop + Xpra stack
+    - name: Apt — update and install desktop + Xpra + barrier stack
       ansible.builtin.shell: |
-        proot-distro login archlinux --bind {{ t_home }}:/termux-home -- bash -c "
-          pacman -Syu --noconfirm --disable-sandbox &&
-          pacman -S --noconfirm --needed --disable-sandbox xorg-server xfce4 xfce4-terminal xpra picom conky ttf-dejavu ttf-liberation openssh git python python-pip
+        proot-distro login debian --bind {{ t_home }}:/termux-home -- bash -c "
+          export DEBIAN_FRONTEND=noninteractive &&
+          apt-get update -qq &&
+          apt-get install -y --no-install-recommends \
+            xorg xfce4 xfce4-terminal xpra picom conky-all \
+            fonts-dejavu-core fonts-liberation \
+            barrier openssh-client git python3 python3-pip
         "
       changed_when: false
-      tags: arch_packages
+      tags: deb_packages
 
-    - name: Generate SSH key inside Arch (for GitHub — add pubkey manually after)
+    - name: Link dotfiles into Debian home (all via /termux-home — single repo copy)
       ansible.builtin.command: >
-        {{ arch }} bash -c "
-          mkdir -p /root/.ssh &&
-          [ -f /root/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -C '{{ inventory_hostname }}' -f /root/.ssh/id_ed25519 -N ''
-        "
-      changed_when: false
-      tags: dotfiles
-
-    - name: Show SSH public key (add to GitHub)
-      ansible.builtin.command: >
-        {{ arch }} bash -c "cat /root/.ssh/id_ed25519.pub"
-      register: ssh_pubkey
-      changed_when: false
-      tags: dotfiles
-
-    - name: Display SSH public key
-      ansible.builtin.debug:
-        msg: "{{ inventory_hostname }} pubkey: {{ ssh_pubkey.stdout }}"
-      tags: dotfiles
-
-    - name: Link dotfiles into Arch home (all via /termux-home — single repo copy)
-      ansible.builtin.command: >
-        {{ arch }} bash -c "
+        {{ deb }} bash -c "
           mkdir -p /root/.config/picom /root/.local/bin &&
           ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
           ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
@@ -181,9 +164,9 @@
       tags: dotfiles
       # WM is XFCE4 (xfwm4) — i3 not used on tablets.
 
-    - name: Verify Xpra is available inside Arch
+    - name: Verify Xpra is available inside Debian
       ansible.builtin.command: >
-        {{ arch }} bash -c "xpra --version"
+        {{ deb }} bash -c "xpra --version"
       register: xpra_ver
       changed_when: false
       tags: xpra
