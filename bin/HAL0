@@ -71,8 +71,9 @@ do_init() {
   for script in HAL0 HAL; do
     local src="$SCRIPT_DIR/$script"
     local dst="$HOME/.local/bin/$script"
+    rm -f "$dst"
     printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$src" > "$dst"
-    chmod +x "$dst"
+    chmod +x "$dst" || true  # chmod fails on Windows DrvFS
   done
   echo "[HAL0] init complete — HAL0 and HAL dispatcher installed to ~/.local/bin"
   echo "[HAL0] Ensure ~/.local/bin is in PATH (add to ~/.bashrc if needed)"
