@@ -139,8 +139,8 @@
     - name: Pacman — update and install desktop + Xpra stack
       ansible.builtin.shell: |
         proot-distro login archlinux --bind {{ t_home }}:/termux-home -- bash -c "
-          pacman -Syu --noconfirm &&
-          pacman -S --noconfirm --needed xorg-server xfce4 xfce4-terminal xpra picom conky ttf-dejavu ttf-liberation openssh git python python-pip
+          pacman -Syu --noconfirm --disable-sandbox &&
+          pacman -S --noconfirm --needed --disable-sandbox xorg-server xfce4 xfce4-terminal xpra picom conky ttf-dejavu ttf-liberation openssh git python python-pip
         "
       changed_when: false
       tags: arch_packages
