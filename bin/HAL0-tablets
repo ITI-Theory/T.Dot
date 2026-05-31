@@ -134,8 +134,10 @@ T=/data/data/com.termux/files/usr/tmp
 echo "[start] $name — \$(date)"
 termux-wake-lock && echo "[ok] wakelock" || echo "[warn] wakelock failed (not fatal)"
 SVDIR=/data/data/com.termux/files/usr/var/service
+# Only start runsvdir if it's not already running — a second instance causes
+# "unable to lock supervise/lock" spam which can take sshd down.
 if ! pgrep -x runsvdir > /dev/null 2>&1; then
-  runsvdir \$SVDIR &
+  nohup runsvdir \$SVDIR > /dev/null 2>&1 & disown
   sleep 1; echo "[ok] runsvdir started"
 else
   echo "[ok] runsvdir already running"
