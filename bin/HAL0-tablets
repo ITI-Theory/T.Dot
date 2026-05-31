@@ -247,7 +247,7 @@ do_tablets() {
       for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
         local label="${pair%%:*}" host="${pair#*:}"
         echo "--- $label ($host) ---"
-        ssh $SSH_OPTS "$host" 'bash -s' <<'BOOTSCRIPT'
+        ssh $SSH_OPTS "$host" 'bash -s' <<'BOOTSCRIPT' || { echo "  [ABORT] $label — see above"; continue; }
 # Pre-check: Termux:Boot APK must be installed for ~/.termux/boot/ to fire
 if pm list packages 2>/dev/null | grep -q 'com.termux.boot'; then
   echo "[ok] Termux:Boot APK installed"
