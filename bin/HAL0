@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve the real path of this script, following symlinks
+_hal0_self="${BASH_SOURCE[0]}"
+[[ -L "$_hal0_self" ]] && _hal0_self="$(readlink -f -- "$_hal0_self")"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$_hal0_self")" && pwd)"
+unset _hal0_self
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 # T.Dot lives inside ITI-Theory/ — sibling repos are one level up
 ITI="$(cd -- "$REPO_ROOT/.." && pwd)"
