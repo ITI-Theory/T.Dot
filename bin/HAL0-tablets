@@ -259,8 +259,8 @@ else
   exit 1
 fi
 # Fix any half-configured packages before installing (avoids interactive conffile prompts)
-DEBIAN_FRONTEND=noninteractive dpkg --configure -a 2>/dev/null || true
-pkg install -y termux-services
+DEBIAN_FRONTEND=noninteractive dpkg --configure -a --force-confold 2>/dev/null || true
+DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::="--force-confold" termux-services
 sv-enable sshd
 sv up sshd 2>/dev/null || true
 mkdir -p ~/.termux/boot
