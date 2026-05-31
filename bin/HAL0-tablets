@@ -183,37 +183,35 @@ ENDSSH
 # ---------------------------------------------------------------------------
 
 _do_start_barrier_server() {
-  # Spawns barriers.exe as a detached Windows process via PowerShell Start-Process.
-  # Works from WSL2 or Git Bash. The process survives the calling shell exiting.
-  # Does NOT require the Windows Barrier GUI or Windows service.
-  local CONF='C:\Users\alist\prj\git\ITI-Theory\T.Dot\provisioning\tablets\Barrier-L.sgc'
-  local BIN='C:\Program Files\Barrier\barriers.exe'
+  # Manages the Windows Barrier service (barrierd.exe), which owns barriers.exe.
+  # One-time setup (already done on Laptop-P14s):
+  #   sc.exe config Barrier start= auto          (requires elevation)
+  #   reg add HKCU\Software\Debauchee\Barrier /v configFile /d <path> /f
+  #   reg add HKCU\Software\Debauchee\Barrier /v autoConfig /d false /f
+  #   reg add HKCU\Software\Debauchee\Barrier /v autoStart  /d true  /f
+  # After that, just: sc start/stop Barrier (via UAC elevation below).
 
-  # Kill any existing barriers.exe (may need UAC for elevated processes)
-  if tasklist.exe 2>/dev/null | grep -qi 'barriers.exe'; then
-    echo "[info] stopping existing barriers.exe..."
-    powershell.exe -NoProfile -Command \
-      "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -Command Stop-Service Barrier -Force -ErrorAction SilentlyContinue; taskkill /IM barriers.exe /F; taskkill /IM barrierd.exe /F'" \
-      2>/dev/null || true
-    sleep 2
+  local state
+  state=$(sc.exe query Barrier 2>/dev/null | grep 'STATE' | awk '{print $4}')
+
+  if [[ "$state" == "RUNNING" ]]; then
+    echo "[ok] Barrier service already RUNNING"
+    netstat.exe -anop tcp 2>/dev/null | grep ':24800' || true
+    return 0
   fi
 
-  # Spawn as detached Windows process — survives WSL2/bash session exit
-  powershell.exe -NoProfile -Command "
-    Start-Process \
-      -FilePath '$BIN' \
-      -ArgumentList '--no-tray','--disable-crypto','-c','$CONF','--address','0.0.0.0:24800' \
-      -WindowStyle Hidden
-  "
+  echo "[info] Starting Barrier service (requires UAC)..."
+  powershell.exe -NoProfile -Command \
+    "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -Command sc.exe start Barrier'" \
+    2>/dev/null
   sleep 3
 
-  local pid
-  pid=$(netstat.exe -anop tcp 2>/dev/null | grep ':24800' | awk '{print $5}' | head -1)
   if netstat.exe -anop tcp 2>/dev/null | grep -q ':24800'; then
-    echo "[ok] barriers.exe running — port 24800 listening"
-    tasklist.exe 2>/dev/null | grep -i barriers || true
+    echo "[ok] Barrier service started — port 24800 listening"
+    tasklist.exe 2>/dev/null | grep -i 'barriers\|barrierd' || true
   else
-    echo "[WARN] barriers.exe did not start — port 24800 not listening"
+    echo "[WARN] Barrier service did not start — port 24800 not listening"
+    sc.exe query Barrier 2>/dev/null | grep 'STATE' || true
   fi
 }
 
@@ -356,8 +354,8 @@ HAL tablets <subcommand>
                  (one-time setup — sshd then auto-restarts on crash and Android boot)
                  Requires: Termux:Boot APK installed (F-Droid or GitHub sideload)
   sshd           Restart sshd on all tablets + post-check
-  barrier-server Start Barrier server as detached Windows process (no GUI, no elevation)
-                 Works from WSL2 or Git Bash. Survives shell exit.
+  barrier-server Start Barrier service if not running (Windows service, auto on boot)
+                 One-time setup already done on Laptop-P14s. UAC prompt on first call.
   start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)
                  Aborts if any tablet unreachable; post-check after
   help           This help
