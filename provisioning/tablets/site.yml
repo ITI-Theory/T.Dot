@@ -71,28 +71,27 @@
         update: true
       tags: dotfiles
 
-    - name: Symlink HAL0 + HAL dispatcher + HAL1 into Termux PATH
+    - name: Symlink HAL0 + HAL dispatcher + HAL1 into Termux PATH ($PREFIX/bin)
       ansible.builtin.shell: |
-        mkdir -p {{ ansible_env.HOME }}/.local/bin
-        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL0 {{ ansible_env.HOME }}/.local/bin/HAL0
-        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL  {{ ansible_env.HOME }}/.local/bin/HAL
-        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot/bin/HAL1 {{ ansible_env.HOME }}/.local/bin/HAL1
+        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL0 {{ ansible_env.PREFIX }}/bin/HAL0
+        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/T.Dot/bin/HAL  {{ ansible_env.PREFIX }}/bin/HAL
+        ln -sfn {{ ansible_env.HOME }}/prj/git/ITI-Theory/U.Dot/bin/HAL1 {{ ansible_env.PREFIX }}/bin/HAL1
       changed_when: false
       tags: dotfiles
+      # Termux PATH = $PREFIX/bin only. ~/.local/bin is NOT in PATH.
 
 - name: Arch (PRoot) layer — packages + Xpra + dotlinks
   hosts: tablets
   gather_facts: false
 
   vars:
-    # proot-distro is single-user (root). Its rootfs lives inside Termux app data:
-    #   ~/.local/share/proot-distro/installed-rootfs/archlinux/
-    # Termux cannot access the real Android / — it is sandboxed.
-    # Repos are cloned ONLY in Termux ($HOME/prj/git/ITI-Theory/).
-    # The Termux home is bind-mounted into proot at /termux-home.
-    # ALL dotfile symlinks inside proot point to /termux-home/ — no repos
-    # are cloned inside proot. Interactive sessions must always use --bind:
-    #   proot-distro login archlinux --bind ~/:/termux-home
+    # proot-distro uses ptrace to emulate a root environment — the container
+    # appears as uid 0/root but it is NOT real root. No kernel operations
+    # (mount, modprobe) are possible. File I/O and pacman work fine.
+    #
+    # We bind-mount the Termux home into proot at /termux-home so that files
+    # cloned in the Termux layer (U.Dot, T.Dot) are accessible inside Arch
+    # without re-cloning. Symlinks in /root/.config/ point into /termux-home/.
     arch: "proot-distro login archlinux --bind {{ ansible_env.HOME }}:/termux-home --"
 
   tasks:
@@ -139,7 +138,7 @@
         msg: "{{ inventory_hostname }} pubkey: {{ ssh_pubkey.stdout }}"
       tags: dotfiles
 
-    - name: Link dotfiles into Arch home (all via /termux-home)
+    - name: Link dotfiles into Arch home (all via /termux-home — no repos cloned in proot)
       ansible.builtin.command: >
         {{ arch }} bash -c "
           mkdir -p /root/.config/picom /root/.local/bin &&
@@ -152,8 +151,9 @@
         "
       changed_when: false
       tags: dotfiles
-      # Single source of truth: repos live in Termux, mounted at /termux-home.
-      # No git inside proot. WM is XFCE4 (xfwm4) — i3 not used on tablets.
+      # proot Arch has a real /root/.local/bin in its rootfs — PATH includes it.
+      # Repos live in Termux only; mounted at /termux-home via --bind.
+      # WM is XFCE4 (xfwm4) — i3 not used on tablets.
 
     - name: Verify Xpra is available inside Arch
       ansible.builtin.command: >
