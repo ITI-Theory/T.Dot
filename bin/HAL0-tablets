@@ -238,6 +238,37 @@ do_tablets() {
       _tablet_check
       ;;
 
+    boot-install)
+      # {P: tablets reachable} install termux-services + runit sshd + Termux:Boot script
+      # {Q: sshd supervised by runit; ~/.termux/boot/start-services.sh in place}
+      echo "=== Installing termux-services + runit sshd on all tablets ==="
+      echo "(Requires Termux:Boot APK on each tablet — install from F-Droid or GitHub sideload)"
+      echo ""
+      for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
+        local label="${pair%%:*}" host="${pair#*:}"
+        echo "--- $label ($host) ---"
+        ssh $SSH_OPTS "$host" 'bash -s' <<'BOOTSCRIPT'
+pkg install -y termux-services
+sv-enable sshd
+sv up sshd 2>/dev/null || true
+mkdir -p ~/.termux/boot
+cat > ~/.termux/boot/start-services.sh << 'BOOTEOF'
+#!/data/data/com.termux/files/usr/bin/bash
+termux-wake-lock
+. $PREFIX/etc/profile.d/termux-services.sh
+runsvdir $SVDIR &
+BOOTEOF
+chmod +x ~/.termux/boot/start-services.sh
+echo "[ok] termux-services installed, sshd enabled under runit"
+echo "[ok] boot script: ~/.termux/boot/start-services.sh"
+sv status sshd 2>&1 || echo "(runit not running yet — active after next reboot)"
+BOOTSCRIPT
+        echo ""
+      done
+      echo "=== Post-check ==="
+      _tablet_check
+      ;;
+
     help|*)
       cat <<'TUSAGE'
 HAL tablets <subcommand>
@@ -247,6 +278,9 @@ HAL tablets <subcommand>
   check          Show state (alias: status)
   battery        Send battery-optimization exemption dialog to all tablets
                  (tap Allow × 2 per tablet, then run 'start')
+  boot-install   Install termux-services, enable runit sshd, write Termux:Boot script
+                 (one-time setup — sshd then auto-restarts on crash and Android boot)
+                 Requires: Termux:Boot APK installed (F-Droid or GitHub sideload)
   sshd           Restart sshd on all tablets + post-check
   start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)
                  Aborts if any tablet unreachable; post-check after
