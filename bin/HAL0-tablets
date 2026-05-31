@@ -163,16 +163,16 @@ ENDSSH
   sleep 5
 
   tmux -S "$lsock" new-session -d -s "${name}-barrier" \
-    "ssh $SSH_OPTS $host \"T=/data/data/com.termux/files/usr/tmp; NAME=$name; BARRIER=10.133.134.136; TMPDIR=\\\$T proot-distro login debian --bind ~/:/termux-home --bind \\\$T/.X11-unix:/tmp/.X11-unix -- bash -c 'while true; do DISPLAY=:0 barrierc --no-tray --disable-crypto --name \\\$NAME --display :0 \\\$BARRIER; sleep 3; done'\""
+    "ssh $SSH_OPTS $host \"T=/data/data/com.termux/files/usr/tmp; TMPDIR=\\\$T proot-distro login debian --bind ~/:/termux-home --bind \\\$T/.X11-unix:/tmp/.X11-unix -- bash -c 'while true; do DISPLAY=:0 barrierc --no-tray --disable-crypto --name ${name} --display :0 10.133.134.136; sleep 3; done'\""
   sleep 3
 
   echo "[ok] persistent SSH sessions open in local tmux (sock: $lsock)"
   echo "[ok] sessions: ${name}-xfce  ${name}-barrier"
 
-  # Check barrierc came up on tablet
-  barrierc_n=$(ssh $SSH_OPTS "$host" 'pgrep -c barrierc 2>/dev/null || echo 0' 2>/dev/null || echo 0)
-  if [[ "$barrierc_n" -gt 0 ]]; then
-    echo "[ok] barrierc running (pid count=$barrierc_n)"
+  # Check barrierc came up on tablet (give proot 5s to settle first)
+  sleep 5
+  if ssh $SSH_OPTS "$host" 'pgrep -x barrierc > /dev/null 2>&1' 2>/dev/null; then
+    echo "[ok] barrierc running on $name"
   else
     echo "[WARN] barrierc NOT running — barrier server may be down or screen name wrong ($name)"
   fi
