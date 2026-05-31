@@ -132,7 +132,18 @@ NAME=$name
 BARRIER=10.133.134.136
 
 echo "[start] \$NAME — \$(date)"
+# Acquire wakelock + ensure runsvdir (sshd supervisor) is running persistently.
+# Both must outlive this SSH session, so disown them.
 termux-wake-lock && echo "[ok] wakelock" || echo "[warn] wakelock failed (not fatal)"
+SVDIR=/data/data/com.termux/files/usr/var/service
+if ! pgrep -x runsvdir > /dev/null 2>&1; then
+  nohup bash -c "runsvdir \$SVDIR" > /dev/null 2>&1 &
+  disown
+  sleep 1
+  echo "[ok] runsvdir started"
+else
+  echo "[ok] runsvdir already running"
+fi
 pkill -f xfce4-session 2>/dev/null; pkill -f barrierc 2>/dev/null; pkill -f termux-x11 2>/dev/null
 tmux -S "\$SOCK" kill-server 2>/dev/null
 sleep 1
