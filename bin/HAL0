@@ -88,6 +88,11 @@ do_init() {
 do_prime() {
   banner "HAL prime — $(date '+%Y-%m-%d %H:%M')"
 
+  section "MODE"
+  echo "AUTOPILOT — propose actions as a numbered checklist, then wait."
+  echo "User vocabulary: 'next'/'y' = next step; 'go all'/'A' = whole list;"
+  echo "'stop'/'n' = abort. Full policy in master instructions below."
+
   section "MASTER INSTRUCTIONS (T/.github/copilot-instructions.md)"
   if [[ -f "$ITI/T/.github/copilot-instructions.md" ]]; then
     cat "$ITI/T/.github/copilot-instructions.md"

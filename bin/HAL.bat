@@ -38,6 +38,11 @@ echo ================================================================
 echo === HAL prime
 echo ================================================================
 echo.
+echo --- MODE ---
+echo AUTOPILOT - propose actions as a numbered checklist, then wait.
+echo User vocabulary: 'next'/'y' = next step; 'go all'/'A' = whole list;
+echo 'stop'/'n' = abort. Full policy in master instructions below.
+echo.
 echo --- MASTER INSTRUCTIONS (T/.github/copilot-instructions.md) ---
 if exist "%ITI%\T\.github\copilot-instructions.md" (
   type "%ITI%\T\.github\copilot-instructions.md"
