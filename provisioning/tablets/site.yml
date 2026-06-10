@@ -73,8 +73,8 @@
       ignore_errors: true
       # Silently fails if no container named 'debian' exists — that's fine.
 
-    - name: Install Debian bookworm via proot-distro (clean)
-      ansible.builtin.command: proot-distro install debian:bookworm --name debian
+    - name: Install Debian via proot-distro (clean)
+      ansible.builtin.command: proot-distro install debian
       when: "proot_debian_check.stdout == 'absent'"
 
     - name: Clone T.Dot (HAL)
@@ -150,9 +150,10 @@
           export DEBIAN_FRONTEND=noninteractive &&
           apt-get update -qq &&
           apt-get install -y --no-install-recommends \
-            xorg xfce4 xfce4-terminal xpra picom conky-all \
+            xorg awesome xfce4-terminal xpra picom conky-all \
             fonts-dejavu-core fonts-liberation \
-            barrier openssh-client git python3 python3-pip
+            barrier openssh-client git python3 python3-venv \
+            neovim build-essential ripgrep fzf dbus-x11
         "
       changed_when: false
       tags: deb_packages
@@ -201,7 +202,9 @@
           ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
           ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL0 /root/.local/bin/HAL0 &&
           ln -sfn /termux-home/prj/git/ITI-Theory/T.Dot/bin/HAL  /root/.local/bin/HAL  &&
-          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bin/HAL1 /root/.local/bin/HAL1
+          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bin/HAL1 /root/.local/bin/HAL1 &&
+          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/awesome/rc.lua /root/.config/awesome/rc.lua &&
+          ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/nvim /root/.config/nvim
         "
       changed_when: false
       tags: dotfiles
@@ -232,7 +235,8 @@
         sudo apt-get install -y --no-install-recommends \
           xfce4 xfce4-terminal xpra picom conky-all \
           fonts-dejavu-core fonts-liberation \
-          dbus-x11 xdotool git python3 python3-pip
+          dbus-x11 xdotool git python3 python3-venv \
+            neovim build-essential ripgrep fzf dbus-x11
       changed_when: false
       tags: deb_packages
 
@@ -292,6 +296,8 @@
       ansible.builtin.shell: |
         mkdir -p "$HOME/.config/picom" "$HOME/.local/bin"
         ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/picom/picom.conf" "$HOME/.config/picom/picom.conf"
+        ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/awesome/rc.lua" "/root/.config/awesome/rc.lua"
+        ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/nvim" "$HOME/.config/nvim"
         ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc"  "$HOME/.bashrc"
         ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile" "$HOME/.bash_profile"
         ln -sfn "$HOME/prj/git/ITI-Theory/T.Dot/bin/HAL0" "$HOME/.local/bin/HAL0"

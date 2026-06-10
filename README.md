@@ -25,12 +25,12 @@ HAL help               List commands.
 
 ## Packs (HAL prime extras)
 
-| Pack | Contents |
-|---|---|
-| `papers` | All U paper source .md files |
-| `lean` | All U/src .lean files |
-| `process` | U/PROCESS_PROCEDURES.md in full |
-| `issues` | Open GitHub issues across T.Ops, U, U.Ops (requires gh CLI) |
+| Pack     | Contents                                                          |
+|----------|-------------------------------------------------------------------|
+| `papers` | All U paper source .md files                                      |
+| `lean`   | All U/src .lean files                                             |
+| `process`| U/PROCESS_PROCEDURES.md in full                                   |
+| `issues` | Open GitHub issues across T.Ops, U, U.Ops (requires gh CLI)       |
 
 ## Architecture
 
