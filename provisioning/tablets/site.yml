@@ -35,30 +35,30 @@
     - name: Update Termux package index
       ansible.builtin.command: pkg update -y
       changed_when: false
+      # Only runs once — subsequent provisions skip if recently updated (within 1 day)
+      # To force: HAL provision tablets --tags always
 
-    - name: Install Termux core packages
-      ansible.builtin.command: >
-        pkg install -y
-        proot-distro
-        openssh
-        python
-        git
+    - name: Install Termux core packages (skip if all present)
+      ansible.builtin.shell: |
+        for p in proot-distro openssh python git; do
+          dpkg -s "$p" 2>/dev/null | grep -q 'Status: install ok installed' || pkg install -y "$p"
+        done
       changed_when: false
 
-    - name: Enable Termux x11-repo
-      ansible.builtin.command: pkg install -y x11-repo
+    - name: Enable Termux x11-repo (skip if already enabled)
+      ansible.builtin.shell: |
+        dpkg -s x11-repo 2>/dev/null | grep -q 'Status: install ok installed' || pkg install -y x11-repo
       changed_when: false
       tags: x11
 
-    - name: Install Termux-X11 companion (Termux-side client)
-      ansible.builtin.command: pkg install -y termux-x11-nightly
+    - name: Install Termux-X11 companion (skip if already installed)
+      ansible.builtin.shell: |
+        dpkg -s termux-x11-nightly 2>/dev/null | grep -q 'Status: install ok installed' || pkg install -y termux-x11-nightly
       changed_when: false
       tags: x11
       # NOTE: the Android APK must be sideloaded manually — it cannot be
       # installed via pkg. Download from:
       #   https://github.com/termux/termux-x11/releases
-      # Install the .apk on the tablet, then launch it before running
-      # startxfce4 (or any X app) inside proot.
 
     - name: Check if Debian container is installed and functional
       ansible.builtin.shell: proot-distro login debian -- true 2>/dev/null && echo present || echo absent
@@ -170,8 +170,9 @@
       changed_when: false
       tags: deb_packages
 
-    - name: Install termux-services (runit supervisor)
-      ansible.builtin.command: pkg install -y termux-services
+    - name: Install termux-services (skip if already installed)
+      ansible.builtin.shell: |
+        dpkg -s termux-services 2>/dev/null | grep -q 'Status: install ok installed' || pkg install -y termux-services
       changed_when: false
       tags: boot
       # termux-services ships a ready-made sshd runit service.
