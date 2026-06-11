@@ -207,6 +207,10 @@
     - name: Write runit run scripts — tx11 and tx11-xfce4 (all tablets)
       ansible.builtin.shell: |
         SVDIR=/data/data/com.termux/files/usr/var/service
+        # Stop services before rewriting scripts so runit doesn't auto-start on script update.
+        # sv down = stop + mark "don't restart"; HAL tablets start does sv up to resume.
+        sv down $SVDIR/tx11       2>/dev/null || true
+        sv down $SVDIR/tx11-xfce4 2>/dev/null || true
         # tx11 — starts Termux:X11 on fixed display :0
         mkdir -p $SVDIR/tx11/log
         cat > $SVDIR/tx11/run << 'EOF'
@@ -226,15 +230,17 @@
         exec /data/data/com.termux/files/usr/bin/start-xfce4.sh 2>&1
         EOF
         chmod +x $SVDIR/tx11-xfce4/run
+        # sv-enable only needed on first provision (creates symlink); idempotent thereafter
         sv-enable tx11       2>/dev/null || true
         sv-enable tx11-xfce4 2>/dev/null || true
       changed_when: false
       tags: [boot, x11]
-      # Idempotent: overwrites run scripts on every provision run.
+      # Provision writes scripts and marks services down. HAL tablets start does sv up.
 
     - name: Write barrierc client runit script — Tablet1 and Tablet3
       ansible.builtin.shell: |
         SVDIR=/data/data/com.termux/files/usr/var/service
+        sv down $SVDIR/barrierc 2>/dev/null || true
         mkdir -p $SVDIR/barrierc/log
         cat > $SVDIR/barrierc/run << 'EOF'
         #!/data/data/com.termux/files/usr/bin/sh
@@ -251,6 +257,7 @@
     - name: Write barriers server runit script — Tablet2 (permanent KVM hub)
       ansible.builtin.shell: |
         SVDIR=/data/data/com.termux/files/usr/var/service
+        sv down $SVDIR/barriers 2>/dev/null || true
         mkdir -p $SVDIR/barriers/log
         cat > $SVDIR/barriers/run << 'EOF'
         #!/data/data/com.termux/files/usr/bin/sh
