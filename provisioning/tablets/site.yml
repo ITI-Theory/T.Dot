@@ -192,10 +192,10 @@
       ansible.builtin.shell: |
         cat > /data/data/com.termux/files/usr/bin/start-xfce4.sh << 'EOF'
         #!/data/data/com.termux/files/usr/bin/sh
-        # Detect native resolution from Termux:X11 display, fall back to 1920x1200
-        RES=$(DISPLAY=:0 xrandr 2>/dev/null | awk '/\*/ {print $1; exit}')
-        RES=${RES:-1920x1200}
-        exec proot-distro login debian --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- bash -c "DISPLAY=:0 xsetroot -cursor_name left_ptr 2>/dev/null; DISPLAY=:0 xrandr --fb $RES 2>/dev/null; DISPLAY=:0 dbus-run-session -- xfce4-session"
+        exec proot-distro login debian \
+          --bind ~/:/termux-home \
+          --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
+          bash -c "DISPLAY=:0 xsetroot -cursor_name left_ptr 2>/dev/null; DISPLAY=:0 dbus-run-session -- xfce4-session"
         EOF
         chmod +x /data/data/com.termux/files/usr/bin/start-xfce4.sh
       changed_when: false
@@ -204,6 +204,7 @@
     - name: Write runit run scripts — tx11 and tx11-xfce4 (all tablets)
       ansible.builtin.shell: |
         SVDIR=/data/data/com.termux/files/usr/var/service
+        # tx11 — starts Termux:X11 on fixed display :0
         mkdir -p $SVDIR/tx11/log
         cat > $SVDIR/tx11/run << 'EOF'
         #!/data/data/com.termux/files/usr/bin/sh
@@ -212,11 +213,14 @@
         exec termux-x11 :0 2>&1
         EOF
         chmod +x $SVDIR/tx11/run
+        # tx11-xfce4 — waits for :0 socket then launches xfce4 via start-xfce4.sh
         mkdir -p $SVDIR/tx11-xfce4/log
         cat > $SVDIR/tx11-xfce4/run << 'EOF'
         #!/data/data/com.termux/files/usr/bin/sh
-        exec 3<> /data/data/com.termux/files/usr/var/run/tx11-xfce4.display
-        exec termux-x11 -displayfd 3 -xstartup start-xfce4.sh 2>&1
+        # Wait for X0 socket (tx11 must be up first)
+        SOCK=/data/data/com.termux/files/usr/tmp/.X11-unix/X0
+        i=0; while [ ! -S "$SOCK" ] && [ $i -lt 20 ]; do sleep 1; i=$((i+1)); done
+        exec /data/data/com.termux/files/usr/bin/start-xfce4.sh 2>&1
         EOF
         chmod +x $SVDIR/tx11-xfce4/run
         sv-enable tx11       2>/dev/null || true
