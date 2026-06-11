@@ -153,6 +153,9 @@ else
   echo "[ok] runsvdir already running"
 fi
 
+# Kill any proot that survived a previous stop (hangs when inner session crashes)
+pkill -9 -x proot 2>/dev/null; true
+
 # Bring up required services ($svcs)
 # sv cont clears runit's internal "don't restart" flag set by sv down;
 # sv up alone is insufficient after sv down has been used.
@@ -310,12 +313,16 @@ _sv_down $SVDIR/barrierc
 _sv_down $SVDIR/tx11-xfce4
 _sv_down $SVDIR/tx11
 sleep 1
-pkill -x termux-x11    2>/dev/null; true
-pkill -x barrierc      2>/dev/null; true
-pkill -x barriers      2>/dev/null; true
-pkill -f xfce4-session 2>/dev/null; true
+pkill -x termux-x11      2>/dev/null; true
+pkill -x barrierc        2>/dev/null; true
+pkill -x barriers        2>/dev/null; true
+pkill -f xfce4-session   2>/dev/null; true
 pkill -f dbus-run-session 2>/dev/null; true
-pkill -f proot-distro  2>/dev/null; true
+pkill -f proot-distro    2>/dev/null; true
+# proot binary hangs when inner session crashes; kill -9 to unstick it so
+# runit sees the service exit and can restart on next sv up.
+pkill -9 -x proot        2>/dev/null; true
+sleep 1
 rm -f /data/data/com.termux/files/usr/tmp/.X11-unix/X*
 STOPSSH
       done
