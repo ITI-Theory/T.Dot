@@ -122,13 +122,16 @@
         accept_hostkey: true
       tags: dotfiles
 
-    - name: Symlink HAL0 + HAL dispatcher + HAL1 into Termux PATH
+    - name: Install HAL forwarding wrappers into Termux PATH
       ansible.builtin.shell: |
-        ln -sfn {{ t_home }}/prj/git/ITI-Theory/T.Dot/bin/HAL0 {{ t_prefix }}/bin/HAL0
-        ln -sfn {{ t_home }}/prj/git/ITI-Theory/T.Dot/bin/HAL  {{ t_prefix }}/bin/HAL
-        ln -sfn {{ t_home }}/prj/git/ITI-Theory/U.Dot/bin/HAL1 {{ t_prefix }}/bin/HAL1
+        printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "{{ t_home }}/prj/git/ITI-Theory/T.Dot/bin/HAL0" > {{ t_prefix }}/bin/HAL0
+        printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "{{ t_home }}/prj/git/ITI-Theory/T.Dot/bin/HAL"  > {{ t_prefix }}/bin/HAL
+        printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "{{ t_home }}/prj/git/ITI-Theory/U.Dot/bin/HAL1" > {{ t_prefix }}/bin/HAL1
+        chmod +x {{ t_prefix }}/bin/HAL0 {{ t_prefix }}/bin/HAL {{ t_prefix }}/bin/HAL1
       changed_when: false
       tags: dotfiles
+      # Forwarding wrappers (not symlinks) so BASH_SOURCE[0] resolves to the real
+      # script path. Symlinks break the SCRIPT_DIR/REPO_ROOT/ITI path calculation.
       # Termux PATH = $PREFIX/bin only. Write access confirmed.
 
 - name: Debian (PRoot) layer — packages + Xpra + dotlinks
@@ -294,14 +297,18 @@
 
     - name: Link dotfiles from WSL2 Linux FS repos (no /mnt/c)
       ansible.builtin.shell: |
-        mkdir -p "$HOME/.config/picom" "$HOME/.local/bin"
+        mkdir -p "$HOME/.config/picom" "$HOME/.config/awesome" "$HOME/.local/bin"
         ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/picom/picom.conf" "$HOME/.config/picom/picom.conf"
-        ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/awesome/rc.lua" "/root/.config/awesome/rc.lua"
+        ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/awesome/rc.lua" "$HOME/.config/awesome/rc.lua"
         ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/nvim" "$HOME/.config/nvim"
         ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc"  "$HOME/.bashrc"
         ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile" "$HOME/.bash_profile"
-        ln -sfn "$HOME/prj/git/ITI-Theory/T.Dot/bin/HAL0" "$HOME/.local/bin/HAL0"
-        ln -sfn "$HOME/prj/git/ITI-Theory/T.Dot/bin/HAL"  "$HOME/.local/bin/HAL"
-        ln -sfn "$HOME/prj/git/ITI-Theory/U.Dot/bin/HAL1" "$HOME/.local/bin/HAL1"
+        printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$HOME/prj/git/ITI-Theory/T.Dot/bin/HAL0" > "$HOME/.local/bin/HAL0"
+        printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$HOME/prj/git/ITI-Theory/T.Dot/bin/HAL"  > "$HOME/.local/bin/HAL"
+        printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$HOME/prj/git/ITI-Theory/U.Dot/bin/HAL1" > "$HOME/.local/bin/HAL1"
+        chmod +x "$HOME/.local/bin/HAL0" "$HOME/.local/bin/HAL" "$HOME/.local/bin/HAL1"
+        grep -q '\.local/bin' "$HOME/.bashrc" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
       changed_when: false
       tags: dotfiles
+      # Forwarding wrappers (not symlinks) so BASH_SOURCE[0] resolves correctly.
+      # Also ensures ~/.local/bin is in PATH.
