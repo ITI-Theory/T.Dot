@@ -188,20 +188,19 @@
       # sv-enable creates the symlink in $SVDIR; sv up starts it immediately.
       # After this sshd restarts automatically on crash — no more manual sshd.
 
-    - name: Write start-xfce4.sh (idempotent — correct content regardless of pkg version)
-      ansible.builtin.shell: |
-        cat > /data/data/com.termux/files/usr/bin/start-xfce4.sh << 'EOF'
-        #!/data/data/com.termux/files/usr/bin/sh
-        # Clean stale ICE/xfsm locks that prevent xfce4-session from starting after crash
-        rm -f /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/tmp/.xfsm-ICE-* \
-              /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/tmp/.ICE-unix/*
-        exec proot-distro login debian --no-sysvipc \
-          --bind ~/:/termux-home \
-          --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
-          bash --norc --noprofile -c "DISPLAY=:0 xsetroot -cursor_name left_ptr 2>/dev/null; DISPLAY=:0 dbus-run-session -- xfce4-session"
-        EOF
-        chmod +x /data/data/com.termux/files/usr/bin/start-xfce4.sh
-      changed_when: false
+    - name: Write start-xfce4.sh
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/bin/start-xfce4.sh
+        mode: '0755'
+        content: |
+          #!/data/data/com.termux/files/usr/bin/sh
+          # Clean stale ICE/xfsm locks that prevent xfce4-session from starting after crash
+          rm -f /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/tmp/.xfsm-ICE-* \
+                /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/tmp/.ICE-unix/*
+          exec proot-distro login debian --no-sysvipc \
+            --bind ~/:/termux-home \
+            --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
+            bash --norc --noprofile -c "DISPLAY=:0 xsetroot -cursor_name left_ptr 2>/dev/null; DISPLAY=:0 dbus-run-session -- xfce4-session"
       tags: [boot, x11]
 
     - name: Stop tx11 services before rewriting scripts (prevent runit auto-start)
@@ -240,8 +239,10 @@
           exec /data/data/com.termux/files/usr/bin/start-xfce4.sh 2>&1
       tags: [boot, x11]
 
-    - name: Enable tx11 and tx11-xfce4 runit services
-      ansible.builtin.shell: >
+    - name: Enable tx11 and tx11-xfce4 runit services (mark down first so runit does not auto-start)
+      ansible.builtin.shell: |
+        SVDIR=/data/data/com.termux/files/usr/var/service
+        touch $SVDIR/tx11/down $SVDIR/tx11-xfce4/down
         sv-enable tx11 2>/dev/null; sv-enable tx11-xfce4 2>/dev/null; true
       changed_when: false
       tags: [boot, x11]
@@ -271,8 +272,10 @@
       when: inventory_hostname != 'tablet2'
       tags: [boot, x11]
 
-    - name: Enable barrierc runit service
-      ansible.builtin.shell: sv-enable barrierc 2>/dev/null; true
+    - name: Enable barrierc runit service (mark down first so runit does not auto-start)
+      ansible.builtin.shell: |
+        touch /data/data/com.termux/files/usr/var/service/barrierc/down
+        sv-enable barrierc 2>/dev/null; true
       when: inventory_hostname != 'tablet2'
       changed_when: false
       tags: [boot, x11]
@@ -302,8 +305,10 @@
       when: inventory_hostname == 'tablet2'
       tags: [boot, x11]
 
-    - name: Enable barriers runit service
-      ansible.builtin.shell: sv-enable barriers 2>/dev/null; true
+    - name: Enable barriers runit service (mark down first so runit does not auto-start)
+      ansible.builtin.shell: |
+        touch /data/data/com.termux/files/usr/var/service/barriers/down
+        sv-enable barriers 2>/dev/null; true
       when: inventory_hostname == 'tablet2'
       changed_when: false
       tags: [boot, x11]
