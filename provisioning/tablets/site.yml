@@ -195,10 +195,10 @@
         # Clean stale ICE/xfsm locks that prevent xfce4-session from starting after crash
         rm -f /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/tmp/.xfsm-ICE-* \
               /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/tmp/.ICE-unix/*
-        exec proot-distro login debian \
+        exec proot-distro login debian --no-sysvipc \
           --bind ~/:/termux-home \
           --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
-          bash -c "DISPLAY=:0 xsetroot -cursor_name left_ptr 2>/dev/null; DISPLAY=:0 dbus-run-session -- xfce4-session"
+          bash --norc --noprofile -c "DISPLAY=:0 xsetroot -cursor_name left_ptr 2>/dev/null; DISPLAY=:0 dbus-run-session -- xfce4-session"
         EOF
         chmod +x /data/data/com.termux/files/usr/bin/start-xfce4.sh
       changed_when: false
@@ -238,8 +238,8 @@
         mkdir -p $SVDIR/barrierc/log
         cat > $SVDIR/barrierc/run << 'EOF'
         #!/data/data/com.termux/files/usr/bin/sh
-        exec proot-distro login debian --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
-          bash -c "DISPLAY=:0 barrierc --no-tray --disable-crypto --name {{ inventory_hostname | capitalize }} -f tablet2.local"
+        exec proot-distro login debian --no-sysvipc --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
+          bash --norc --noprofile -c "DISPLAY=:0 barrierc --no-tray --disable-crypto --name {{ inventory_hostname | capitalize }} -f tablet2.local"
         EOF
         chmod +x $SVDIR/barrierc/run
         sv-enable barrierc 2>/dev/null || true
@@ -254,8 +254,8 @@
         mkdir -p $SVDIR/barriers/log
         cat > $SVDIR/barriers/run << 'EOF'
         #!/data/data/com.termux/files/usr/bin/sh
-        exec proot-distro login debian --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
-          bash -c "DISPLAY=:0 barriers --no-tray --disable-crypto --config /root/.config/barrier/barrier.conf -f"
+        exec proot-distro login debian --no-sysvipc --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
+          bash --norc --noprofile -c "DISPLAY=:0 barriers --no-tray --disable-crypto --config /root/.config/barrier/barrier.conf -f"
         EOF
         chmod +x $SVDIR/barriers/run
         sv-enable barriers 2>/dev/null || true
