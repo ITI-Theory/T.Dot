@@ -309,15 +309,15 @@
 
     - name: Request battery optimization exemption for Termux + Termux:X11
       ansible.builtin.shell: |
-        /system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS \
+        am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS \
           -d 'package:com.termux' 2>/dev/null || true
         sleep 2
-        /system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS \
+        am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS \
           -d 'package:com.termux.x11' 2>/dev/null || true
       changed_when: false
       tags: boot
-      # Shows an Allow/Deny dialog on the tablet screen — user must tap Allow.
-      # Cannot be silently automated on Android 12+.
+      # am start without /system/bin/ prefix runs via Termux's own PATH wrapper
+      # which has the correct UID context to launch the dialog.
       # Run this task with the tablet screen ON and unlocked.
 
     - name: Check battery optimization exemption status
