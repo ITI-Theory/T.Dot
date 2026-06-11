@@ -337,6 +337,35 @@ do_sync() {
 }
 
 # ---------------------------------------------------------------------------
+# HAL provision — run Ansible playbook against this machine
+# ---------------------------------------------------------------------------
+
+do_provision() {
+  local limit="${1:-}"
+  local playbook="$REPO_ROOT/provisioning/tablets/site.yml"
+  local inventory="$REPO_ROOT/provisioning/tablets/hosts"
+
+  if [[ ! -f "$playbook" ]]; then
+    echo "[HAL] ERROR: playbook not found at $playbook" >&2
+    echo "[HAL] Run: git -C $REPO_ROOT pull" >&2
+    exit 1
+  fi
+
+  # Auto-detect limit if not provided
+  if [[ -z "$limit" ]]; then
+    if [[ -n "${TERMUX_VERSION:-}" ]] || [[ -d /data/data/com.termux ]]; then
+      limit="tablets"
+    else
+      limit="wsl2"
+    fi
+    echo "[HAL] Auto-detected limit: $limit"
+  fi
+
+  echo "[HAL] Running: ansible-playbook --limit $limit"
+  ansible-playbook -i "$inventory" "$playbook" --limit "$limit" "${@:2}"
+}
+
+# ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
 
@@ -366,6 +395,9 @@ Usage:
   HAL0 tablets start [N] Start X11+XFCE4+Barrier (pre+post check, aborts if down)
   HAL0 tablets sshd      Restart sshd on all 3 tablets + post-check
   HAL0 sync              Pull --ff-only on all known repos (pull-first discipline)
+  HAL0 provision [limit] Run Ansible playbook against this machine.
+                         limit: wsl2 (default on WSL2) or tablets (default on Termux)
+                         Extra args passed through: HAL provision wsl2 --tags dotfiles
   HAL0 init              Install HAL0 + HAL dispatcher into ~/.local/bin + selftest
   HAL0 selftest          Verify installation: wrappers, modules, PATH
   HAL0 help              Show this help
@@ -422,11 +454,12 @@ case "$cmd" in
       _run_prime
     fi
     ;;
-  init)     do_init ;;
-  selftest) _hal_selftest ;;
-  sync)     _hal_selftest --quiet || exit 1; do_sync ;;
-  notes)    _hal_selftest --quiet || exit 1; do_notes "${1:-}" ;;
-  tablets)  _hal_selftest --quiet || exit 1; do_tablets "$@" ;;
+  init)      do_init ;;
+  selftest)  _hal_selftest ;;
+  sync)      _hal_selftest --quiet || exit 1; do_sync ;;
+  provision) _hal_selftest --quiet || exit 1; do_provision "$@" ;;
+  notes)     _hal_selftest --quiet || exit 1; do_notes "${1:-}" ;;
+  tablets)   _hal_selftest --quiet || exit 1; do_tablets "$@" ;;
   help|-h|--help) usage ;;
   *)
     echo "[HAL] Unknown command: $cmd" >&2
