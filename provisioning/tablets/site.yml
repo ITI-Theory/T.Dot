@@ -187,6 +187,55 @@
       # sv-enable creates the symlink in $SVDIR; sv up starts it immediately.
       # After this sshd restarts automatically on crash — no more manual sshd.
 
+    - name: Upgrade termux-x11-nightly (ensures start-xfce4.sh is present)
+      ansible.builtin.command: pkg upgrade -y termux-x11-nightly
+      changed_when: false
+      tags: [boot, x11]
+
+    - name: Write runit run scripts for tx11, tx11-xfce4, barrierc
+      ansible.builtin.shell: |
+        SVDIR=/data/data/com.termux/files/usr/var/service
+        PREFIX=/data/data/com.termux/files/usr
+
+        # tx11 — starts Termux:X11 display server
+        mkdir -p $SVDIR/tx11/log
+        cat > $SVDIR/tx11/run << 'EOF'
+        #!/data/data/com.termux/files/usr/bin/sh
+        TMPDIR=/data/data/com.termux/files/usr/tmp
+        export TMPDIR
+        exec termux-x11 :0 2>&1
+        EOF
+        chmod +x $SVDIR/tx11/run
+
+        # tx11-xfce4 — starts XFCE4 session inside proot Debian on :0
+        mkdir -p $SVDIR/tx11-xfce4/log
+        cat > $SVDIR/tx11-xfce4/run << 'EOF'
+        #!/data/data/com.termux/files/usr/bin/sh
+        exec 3<> /data/data/com.termux/files/usr/var/run/tx11-xfce4.display
+        exec termux-x11 -displayfd 3 -xstartup start-xfce4.sh 2>&1
+        EOF
+        chmod +x $SVDIR/tx11-xfce4/run
+
+        # barrierc — Input Leap / Barrier client inside proot Debian
+        mkdir -p $SVDIR/barrierc/log
+        cat > $SVDIR/barrierc/run << 'EOF'
+        #!/data/data/com.termux/files/usr/bin/sh
+        # Screen name must match Barrier server config exactly (capital T)
+        NAME=$(hostname)
+        exec proot-distro login debian -- \
+          bash -c "DISPLAY=:0 barrierc --no-tray --disable-crypto --name $NAME -f Laptop-P14s.local"
+        EOF
+        chmod +x $SVDIR/barrierc/run
+
+        # Enable all three
+        sv-enable tx11     2>/dev/null || true
+        sv-enable tx11-xfce4 2>/dev/null || true
+        sv-enable barrierc 2>/dev/null || true
+      changed_when: false
+      tags: [boot, x11]
+      # Idempotent: overwrites run scripts on every provision run.
+      # sv-enable "fail" is harmless if service is already directly in SVDIR.
+
     - name: Install Termux:Boot script (starts runit + wakelock on Android boot)
       ansible.builtin.shell: |
         mkdir -p {{ t_home }}/.termux/boot
