@@ -436,7 +436,96 @@
           </channel>
       tags: [boot, x11]
 
-    - name: Link dotfiles into Debian home (all via /termux-home — single repo copy)
+    - name: Write xfce4 panel launcher files (terminal, files, browser, appfinder)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/xfce4/panel/launcher-17
+        - /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/xfce4/panel/launcher-18
+        - /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/xfce4/panel/launcher-19
+        - /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/xfce4/panel/launcher-20
+      tags: [boot, x11]
+
+    - name: Write panel launcher-17 (Terminal Emulator)
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/xfce4/panel/launcher-17/17812102231.desktop
+        content: |
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Exec=exo-open --launch TerminalEmulator
+          Icon=org.xfce.terminalemulator
+          StartupNotify=true
+          Terminal=false
+          Categories=Utility;X-XFCE;X-Xfce-Toplevel;
+          OnlyShowIn=XFCE;
+          X-AppStream-Ignore=True
+          Name=Terminal Emulator
+          Comment=Use the command line
+          X-XFCE-Source=file:///usr/share/applications/xfce4-terminal-emulator.desktop
+      tags: [boot, x11]
+
+    - name: Write panel launcher-18 (File Manager)
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/xfce4/panel/launcher-18/17812102232.desktop
+        content: |
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Exec=exo-open --launch FileManager %u
+          Icon=org.xfce.filemanager
+          StartupNotify=true
+          Terminal=false
+          Categories=Utility;X-XFCE;X-Xfce-Toplevel;
+          OnlyShowIn=XFCE;
+          X-XFCE-MimeType=inode/directory;x-scheme-handler/trash;
+          X-AppStream-Ignore=True
+          Name=File Manager
+          Comment=Browse the file system
+          X-XFCE-Source=file:///usr/share/applications/xfce4-file-manager.desktop
+      tags: [boot, x11]
+
+    - name: Write panel launcher-19 (Web Browser)
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/xfce4/panel/launcher-19/17812102243.desktop
+        content: |
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Exec=exo-open --launch WebBrowser %u
+          Icon=org.xfce.webbrowser
+          StartupNotify=true
+          Terminal=false
+          Categories=Network;X-XFCE;X-Xfce-Toplevel;
+          OnlyShowIn=XFCE;
+          X-XFCE-MimeType=x-scheme-handler/http;x-scheme-handler/https;
+          X-AppStream-Ignore=True
+          Name=Web Browser
+          Comment=Browse the web
+          X-XFCE-Source=file:///usr/share/applications/xfce4-web-browser.desktop
+      tags: [boot, x11]
+
+    - name: Write panel launcher-20 (Application Finder)
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/xfce4/panel/launcher-20/17812102244.desktop
+        content: |
+          [Desktop Entry]
+          Version=1.0
+          Exec=xfce4-appfinder
+          Icon=org.xfce.appfinder
+          StartupNotify=true
+          Terminal=false
+          Type=Application
+          Categories=Utility;X-XFCE;
+          Name=Application Finder
+          Comment=Find and launch applications installed on your system
+          Keywords=program;applications;bookmarks;
+          X-XFCE-Source=file:///usr/share/applications/xfce4-appfinder.desktop
+      tags: [boot, x11]
+
+
       ansible.builtin.command: >
         {{ deb }} bash -c "
           mkdir -p /root/.config/picom /root/.config/awesome /root/.local/bin &&
