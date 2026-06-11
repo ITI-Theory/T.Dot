@@ -348,6 +348,12 @@
       # IMPORTANT: Termux:Boot APK must be installed on the tablet (sideload or F-Droid).
       # Without the APK the ~/.termux/boot/ scripts never fire.
 
+    - name: Clear stale XFCE4 config and session cache in proot Debian (prevents crash loops)
+      ansible.builtin.command: >
+        {{ deb }} bash -c "rm -rf /root/.config/xfce4 /root/.cache/sessions"
+      changed_when: false
+      tags: [boot, x11]
+
     - name: Link dotfiles into Debian home (all via /termux-home — single repo copy)
       ansible.builtin.command: >
         {{ deb }} bash -c "
