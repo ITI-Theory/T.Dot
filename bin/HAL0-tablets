@@ -360,6 +360,51 @@ BOOTSCRIPT
       _tablet_check
       ;;
 
+    pair)
+      # {P: adb installed; Wireless Debugging enabled + pairing code visible on each tablet}
+      # One-time ADB pairing for all 3 tablets.
+      # Usage: HAL tablets pair <p1> <p2> <p3>
+      #   p1/p2/p3 = pairing ports shown under Developer Options → Wireless Debugging →
+      #              "Pair device with pairing code" (NOT the "IP address & Port" port)
+      # After pairing, run: HAL tablets fix-phantom <connect-p1> <connect-p2> <connect-p3>
+      #   (connect ports are shown under "IP address & Port" in Wireless Debugging)
+      local pp1="${1:?Usage: HAL tablets pair <pair-port1> <pair-port2> <pair-port3>}"
+      local pp2="${2:?Usage: HAL tablets pair <pair-port1> <pair-port2> <pair-port3>}"
+      local pp3="${3:?Usage: HAL tablets pair <pair-port1> <pair-port2> <pair-port3>}"
+
+      local ADB=""
+      if command -v adb &>/dev/null; then
+        ADB="$(command -v adb)"
+      elif [[ -f "/mnt/c/Users/alist/AppData/Local/Android/Sdk/platform-tools/adb.exe" ]]; then
+        ADB="/mnt/c/Users/alist/AppData/Local/Android/Sdk/platform-tools/adb.exe"
+      else
+        echo "[ABORT] adb not found. Install: wsl -d Debian -- bash -l -c 'sudo apt-get install -y adb'"
+        return 1
+      fi
+      echo "  adb: $ADB"
+      echo ""
+
+      echo "=== ADB Wireless Pairing ==="
+      echo "    Tablet screen must be ON. Pairing code must be visible."
+      echo ""
+
+      local IPS=()
+      for pair in "tablet1.local" "tablet2.local" "tablet3.local"; do
+        IPS+=("$pair")
+      done
+      local PORTS=("$pp1" "$pp2" "$pp3")
+      local NAMES=("Tablet1" "Tablet2" "Tablet3")
+
+      for i in 0 1 2; do
+        echo "--- ${NAMES[$i]} (${IPS[$i]}:${PORTS[$i]}) ---"
+        echo "  Enter the 6-digit pairing code shown on ${NAMES[$i]}:"
+        "$ADB" pair "${IPS[$i]}:${PORTS[$i]}"
+        echo ""
+      done
+      echo "Pairing done. Now run: HAL tablets fix-phantom <connect-p1> <connect-p2> <connect-p3>"
+      echo "(connect ports are under Developer Options → Wireless Debugging → 'IP address & Port')"
+      ;;
+
     fix-phantom)
       # {P: adb installed, tablets paired via Wireless Debugging}
       # Disable Android 12+ Phantom Process Killer on all tablets via ADB.
@@ -444,7 +489,11 @@ HAL tablets <subcommand>
                  Ports optional (default: 5555). Pass port shown in:
                    Developer Options → Wireless Debugging → "IP address & Port"
                  Prerequisites (one-time per tablet):
-                   adb pair <tablet-ip>:<pair-port>  (6-digit code in Wireless Debugging)
+                   HAL tablets pair <pp1> <pp2> <pp3>
+  pair <pp1> <pp2> <pp3>
+                 One-time ADB Wireless pairing for all 3 tablets.
+                 pp1/pp2/pp3 = pairing ports (Wireless Debugging → "Pair device with code")
+                 Runs adb pair interactively — enter 6-digit code when prompted.
   help           This help
 TUSAGE
       ;;
