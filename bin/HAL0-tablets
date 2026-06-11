@@ -397,7 +397,7 @@ BOOTSCRIPT
       echo "  Resolving IPs via SSH..."
       for i in 0 1 2; do
         local ip
-        ip=$(ssh $SSH_OPTS "${HOSTS[$i]}" 'ip -4 addr show wlan0 2>/dev/null | grep -oE "inet [0-9.]+" | cut -d" " -f2 | head -1' 2>/dev/null)
+        ip=$(ssh $SSH_OPTS "${HOSTS[$i]}" 'echo $SSH_CONNECTION' 2>/dev/null | cut -d' ' -f3)
         if [[ -z "$ip" ]]; then
           echo "  [ABORT] Could not resolve IP for ${NAMES[$i]} — is SSH up? Run: HAL tablets check"
           return 1
@@ -460,7 +460,7 @@ BOOTSCRIPT
       local -a tablet_ips=()
       for i in 0 1 2; do
         local ip
-        ip=$(ssh $SSH_OPTS "${tablet_hosts[$i]}" 'ip -4 addr show wlan0 2>/dev/null | grep -oE "inet [0-9.]+" | cut -d" " -f2 | head -1' 2>/dev/null)
+        ip=$(ssh $SSH_OPTS "${tablet_hosts[$i]}" 'echo $SSH_CONNECTION' 2>/dev/null | cut -d' ' -f3)
         if [[ -z "$ip" ]]; then
           echo "  [ABORT] Could not resolve IP for ${tablet_names[$i]} — is SSH up? Run: HAL tablets check"
           return 1
