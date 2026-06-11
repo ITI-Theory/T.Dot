@@ -208,7 +208,7 @@
     - name: Link dotfiles into Debian home (all via /termux-home — single repo copy)
       ansible.builtin.command: >
         {{ deb }} bash -c "
-          mkdir -p /root/.config/picom /root/.local/bin &&
+          mkdir -p /root/.config/picom /root/.config/awesome /root/.local/bin &&
           ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/picom/picom.conf /root/.config/picom/picom.conf &&
           ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bash/ubuntu/bashrc /root/.bashrc &&
           ln -sfn /termux-home/prj/git/ITI-Theory/U.Dot/bash/ubuntu/profile /root/.bash_profile &&
