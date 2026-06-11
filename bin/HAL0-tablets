@@ -300,23 +300,22 @@ do_tablets() {
       for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
         local label="${pair%%:*}" host="${pair#*:}"
         printf "  %s: " "$label"
-        ssh $SSH_OPTS "$host" \
-          'SVDIR=/data/data/com.termux/files/usr/var/service
-           _sv_down() { [ -d "$1" ] && sv down "$1" 2>/dev/null; true; }
-           _sv_down $SVDIR/barriers
-           _sv_down $SVDIR/barrierc
-           _sv_down $SVDIR/tx11-xfce4
-           _sv_down $SVDIR/tx11
-           sleep 1
-           pkill -x termux-x11    2>/dev/null || true
-           pkill -x barrierc      2>/dev/null || true
-           pkill -x barriers      2>/dev/null || true
-           pkill -f xfce4-session 2>/dev/null || true
-           pkill -f dbus-run-session 2>/dev/null || true
-           pkill -f proot-distro  2>/dev/null || true
-           rm -f /data/data/com.termux/files/usr/tmp/.X11-unix/X*
-           echo stopped' \
-          2>/dev/null || echo "[FAILED]"
+        ssh $SSH_OPTS "$host" 'bash -s' <<'STOPSSH' && echo "stopped" || echo "[FAILED]"
+SVDIR=/data/data/com.termux/files/usr/var/service
+_sv_down() { [ -d "$1" ] && sv down "$1" 2>/dev/null; return 0; }
+_sv_down $SVDIR/barriers
+_sv_down $SVDIR/barrierc
+_sv_down $SVDIR/tx11-xfce4
+_sv_down $SVDIR/tx11
+sleep 1
+pkill -x termux-x11    2>/dev/null; true
+pkill -x barrierc      2>/dev/null; true
+pkill -x barriers      2>/dev/null; true
+pkill -f xfce4-session 2>/dev/null; true
+pkill -f dbus-run-session 2>/dev/null; true
+pkill -f proot-distro  2>/dev/null; true
+rm -f /data/data/com.termux/files/usr/tmp/.X11-unix/X*
+STOPSSH
       done
       echo ""
       echo "=== Post-check ==="
