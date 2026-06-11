@@ -388,17 +388,29 @@ BOOTSCRIPT
       echo "    Tablet screen must be ON. Pairing code must be visible."
       echo ""
 
-      local IPS=()
-      for pair in "tablet1.local" "tablet2.local" "tablet3.local"; do
-        IPS+=("$pair")
-      done
-      local PORTS=("$pp1" "$pp2" "$pp3")
+      # adb pair requires a raw IP — .local mDNS hostnames cause "protocol fault".
+      # Resolve each tablet's IP via SSH (already connected on port 8022).
+      local HOSTS=("$T1" "$T2" "$T3")
       local NAMES=("Tablet1" "Tablet2" "Tablet3")
+      local PORTS=("$pp1" "$pp2" "$pp3")
+      local RESOLVED_IPS=()
+      echo "  Resolving IPs via SSH..."
+      for i in 0 1 2; do
+        local ip
+        ip=$(ssh $SSH_OPTS "${HOSTS[$i]}" 'ip route get 1 2>/dev/null | awk "{print \$NF; exit}" || ifconfig wlan0 2>/dev/null | awk "/inet /{print \$2}"' 2>/dev/null)
+        if [[ -z "$ip" ]]; then
+          echo "  [ABORT] Could not resolve IP for ${NAMES[$i]} — is SSH up? Run: HAL tablets check"
+          return 1
+        fi
+        RESOLVED_IPS+=("$ip")
+        echo "  ${NAMES[$i]}: $ip"
+      done
+      echo ""
 
       for i in 0 1 2; do
-        echo "--- ${NAMES[$i]} (${IPS[$i]}:${PORTS[$i]}) ---"
+        echo "--- ${NAMES[$i]} (${RESOLVED_IPS[$i]}:${PORTS[$i]}) ---"
         echo "  Enter the 6-digit pairing code shown on ${NAMES[$i]}:"
-        "$ADB" pair "${IPS[$i]}:${PORTS[$i]}"
+        "$ADB" pair "${RESOLVED_IPS[$i]}:${PORTS[$i]}"
         echo ""
       done
       echo "Pairing done. Now run: HAL tablets fix-phantom <connect-p1> <connect-p2> <connect-p3>"
@@ -439,12 +451,29 @@ BOOTSCRIPT
       echo "  adb: $ADB"
       echo ""
 
-      local -a entries=("Tablet1:tablet1.local:$p1" "Tablet2:tablet2.local:$p2" "Tablet3:tablet3.local:$p3")
-      for entry in "${entries[@]}"; do
-        local name="${entry%%:*}"
-        local rest="${entry#*:}"
-        local host="${rest%%:*}"
-        local port="${rest#*:}"
+      local -a tablet_hosts=("$T1" "$T2" "$T3")
+      local -a tablet_names=("Tablet1" "Tablet2" "Tablet3")
+      local -a tablet_ports=("$p1" "$p2" "$p3")
+
+      # Resolve IPs via SSH — adb connect needs raw IPs, not .local hostnames
+      echo "  Resolving IPs via SSH..."
+      local -a tablet_ips=()
+      for i in 0 1 2; do
+        local ip
+        ip=$(ssh $SSH_OPTS "${tablet_hosts[$i]}" 'ip route get 1 2>/dev/null | awk "{print \$NF; exit}" || ifconfig wlan0 2>/dev/null | awk "/inet /{print \$2}"' 2>/dev/null)
+        if [[ -z "$ip" ]]; then
+          echo "  [ABORT] Could not resolve IP for ${tablet_names[$i]} — is SSH up? Run: HAL tablets check"
+          return 1
+        fi
+        tablet_ips+=("$ip")
+        echo "  ${tablet_names[$i]}: $ip"
+      done
+      echo ""
+
+      for i in 0 1 2; do
+        local name="${tablet_names[$i]}"
+        local host="${tablet_ips[$i]}"
+        local port="${tablet_ports[$i]}"
         echo "--- $name ($host:$port) ---"
         local connect_out
         connect_out=$("$ADB" connect "$host:$port" 2>&1)
@@ -452,8 +481,7 @@ BOOTSCRIPT
           echo "  [ok] $connect_out"
         else
           echo "  [WARN] connect failed: $connect_out"
-          echo "         → pair first: adb pair $host:<pair-port>  (6-digit code in Wireless Debugging)"
-          echo "           then retry: HAL tablets fix-phantom with correct port"
+          echo "         → pair first: HAL tablets pair <pp1> <pp2> <pp3>"
           continue
         fi
         "$ADB" -s "$host:$port" shell settings put global settings_enable_monitor_phantom_procs 0 \
