@@ -204,105 +204,148 @@
       changed_when: false
       tags: [boot, x11]
 
-    - name: Write runit run scripts - tx11 and tx11-xfce4 (all tablets)
-      ansible.builtin.shell: |
-        SVDIR=/data/data/com.termux/files/usr/var/service
-        # Stop services before rewriting scripts so runit doesn't auto-start on script update.
-        # sv down = stop + mark "dont restart"; HAL tablets start does sv up to resume.
-        sv down $SVDIR/tx11       2>/dev/null || true
-        sv down $SVDIR/tx11-xfce4 2>/dev/null || true
-        # tx11 -- starts Termux:X11 on fixed display :0
-        mkdir -p $SVDIR/tx11/log
-        cat > $SVDIR/tx11/run << 'EOF'
-        #!/data/data/com.termux/files/usr/bin/sh
-        TMPDIR=/data/data/com.termux/files/usr/tmp
-        export TMPDIR
-        exec termux-x11 :0 2>&1
-        EOF
-        chmod +x $SVDIR/tx11/run
-        # tx11-xfce4 -- waits for :0 socket then launches xfce4 via start-xfce4.sh
-        mkdir -p $SVDIR/tx11-xfce4/log
-        cat > $SVDIR/tx11-xfce4/run << 'EOF'
-        #!/data/data/com.termux/files/usr/bin/sh
-        # Wait for X0 socket (tx11 must be up first)
-        SOCK=/data/data/com.termux/files/usr/tmp/.X11-unix/X0
-        i=0; while [ ! -S "$SOCK" ] && [ $i -lt 20 ]; do sleep 1; i=$((i+1)); done
-        exec /data/data/com.termux/files/usr/bin/start-xfce4.sh 2>&1
-        EOF
-        chmod +x $SVDIR/tx11-xfce4/run
-        # sv-enable only needed on first provision (creates symlink); idempotent thereafter
-        sv-enable tx11       2>/dev/null || true
-        sv-enable tx11-xfce4 2>/dev/null || true
+    - name: Stop tx11 services before rewriting scripts (prevent runit auto-start)
+      ansible.builtin.shell: >
+        SVDIR=/data/data/com.termux/files/usr/var/service &&
+        sv down $SVDIR/tx11 2>/dev/null; sv down $SVDIR/tx11-xfce4 2>/dev/null; true
       changed_when: false
       tags: [boot, x11]
-      # Provision writes scripts and marks services down. HAL tablets start does sv up.
 
-    - name: Write barrierc client runit script — Tablet1 and Tablet3
-      ansible.builtin.shell: |
-        SVDIR=/data/data/com.termux/files/usr/var/service
-        sv down $SVDIR/barrierc 2>/dev/null || true
-        mkdir -p $SVDIR/barrierc/log
-        cat > $SVDIR/barrierc/run << 'EOF'
-        #!/data/data/com.termux/files/usr/bin/sh
-        exec proot-distro login debian --no-sysvipc --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
-          bash --norc --noprofile -c "DISPLAY=:0 barrierc --no-tray --disable-crypto --name {{ inventory_hostname | capitalize }} -f tablet2.local"
-        EOF
-        chmod +x $SVDIR/barrierc/run
-        sv-enable barrierc 2>/dev/null || true
+    - name: Ensure tx11 service dirs exist
+      ansible.builtin.shell: >
+        mkdir -p /data/data/com.termux/files/usr/var/service/tx11/log
+        /data/data/com.termux/files/usr/var/service/tx11-xfce4/log
+      changed_when: false
+      tags: [boot, x11]
+
+    - name: Write tx11 run script
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/service/tx11/run
+        mode: '0755'
+        content: |
+          #!/data/data/com.termux/files/usr/bin/sh
+          TMPDIR=/data/data/com.termux/files/usr/tmp
+          export TMPDIR
+          exec termux-x11 :0 2>&1
+      tags: [boot, x11]
+
+    - name: Write tx11-xfce4 run script
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/service/tx11-xfce4/run
+        mode: '0755'
+        content: |
+          #!/data/data/com.termux/files/usr/bin/sh
+          SOCK=/data/data/com.termux/files/usr/tmp/.X11-unix/X0
+          i=0; while [ ! -S "$SOCK" ] && [ $i -lt 20 ]; do sleep 1; i=$((i+1)); done
+          exec /data/data/com.termux/files/usr/bin/start-xfce4.sh 2>&1
+      tags: [boot, x11]
+
+    - name: Enable tx11 and tx11-xfce4 runit services
+      ansible.builtin.shell: >
+        sv-enable tx11 2>/dev/null; sv-enable tx11-xfce4 2>/dev/null; true
+      changed_when: false
+      tags: [boot, x11]
+
+    - name: Stop barrierc before rewriting script (prevent runit auto-start)
+      ansible.builtin.shell: >
+        sv down /data/data/com.termux/files/usr/var/service/barrierc 2>/dev/null; true
       when: inventory_hostname != 'tablet2'
       changed_when: false
       tags: [boot, x11]
-      # Screen name hardcoded via Ansible: tablet1→Tablet1, tablet3→Tablet3 (Jinja capitalize filter)
 
-    - name: Write barriers server runit script — Tablet2 (permanent KVM hub)
-      ansible.builtin.shell: |
-        SVDIR=/data/data/com.termux/files/usr/var/service
-        sv down $SVDIR/barriers 2>/dev/null || true
-        mkdir -p $SVDIR/barriers/log
-        cat > $SVDIR/barriers/run << 'EOF'
-        #!/data/data/com.termux/files/usr/bin/sh
-        exec proot-distro login debian --no-sysvipc --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
-          bash --norc --noprofile -c "DISPLAY=:0 barriers --no-tray --disable-crypto --name Tablet2 --config /root/.config/barrier/barrier.conf -f"
-        EOF
-        chmod +x $SVDIR/barriers/run
-        sv-enable barriers 2>/dev/null || true
+    - name: Ensure barrierc service dir exists
+      ansible.builtin.shell: >
+        mkdir -p /data/data/com.termux/files/usr/var/service/barrierc/log
+      when: inventory_hostname != 'tablet2'
+      changed_when: false
+      tags: [boot, x11]
+
+    - name: Write barrierc run script - Tablet1 and Tablet3
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/service/barrierc/run
+        mode: '0755'
+        content: |
+          #!/data/data/com.termux/files/usr/bin/sh
+          exec proot-distro login debian --no-sysvipc --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
+            bash --norc --noprofile -c "DISPLAY=:0 barrierc --no-tray --disable-crypto --name {{ inventory_hostname | capitalize }} -f tablet2.local"
+      when: inventory_hostname != 'tablet2'
+      tags: [boot, x11]
+
+    - name: Enable barrierc runit service
+      ansible.builtin.shell: sv-enable barrierc 2>/dev/null; true
+      when: inventory_hostname != 'tablet2'
+      changed_when: false
+      tags: [boot, x11]
+
+    - name: Stop barriers before rewriting script (prevent runit auto-start)
+      ansible.builtin.shell: >
+        sv down /data/data/com.termux/files/usr/var/service/barriers 2>/dev/null; true
       when: inventory_hostname == 'tablet2'
       changed_when: false
       tags: [boot, x11]
 
-    - name: Write barrier server config into proot rootfs — Tablet2
-      ansible.builtin.shell: |
-        ROOTFS=/data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs
-        mkdir -p $ROOTFS/root/.config/barrier
-        cat > $ROOTFS/root/.config/barrier/barrier.conf << 'BARRIEREOF'
-        section: screens
-            Tablet1:
-            Tablet2:
-            Tablet3:
-            Laptop-P14s:
-        end
-        section: aliases
-        end
-        section: links
-            Tablet1:
-                right = Tablet2
-            Tablet2:
-                left = Tablet1
-                right = Tablet3
-                up = Laptop-P14s
-            Tablet3:
-                left = Tablet2
-            Laptop-P14s:
-                down = Tablet2
-        end
-        section: options
-            screenSaverSync = false
-            clipboardSharing = false
-            switchDelay = 500
-        end
-        BARRIEREOF
+    - name: Ensure barriers service dir exists
+      ansible.builtin.shell: >
+        mkdir -p /data/data/com.termux/files/usr/var/service/barriers/log
       when: inventory_hostname == 'tablet2'
       changed_when: false
+      tags: [boot, x11]
+
+    - name: Write barriers run script - Tablet2
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/service/barriers/run
+        mode: '0755'
+        content: |
+          #!/data/data/com.termux/files/usr/bin/sh
+          exec proot-distro login debian --no-sysvipc --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
+            bash --norc --noprofile -c "DISPLAY=:0 barriers --no-tray --disable-crypto --name Tablet2 --config /root/.config/barrier/barrier.conf -f"
+      when: inventory_hostname == 'tablet2'
+      tags: [boot, x11]
+
+    - name: Enable barriers runit service
+      ansible.builtin.shell: sv-enable barriers 2>/dev/null; true
+      when: inventory_hostname == 'tablet2'
+      changed_when: false
+      tags: [boot, x11]
+
+    - name: Ensure barrier config dir exists in proot rootfs - Tablet2
+      ansible.builtin.file:
+        path: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/barrier
+        state: directory
+        mode: '0755'
+      when: inventory_hostname == 'tablet2'
+      tags: [boot, x11]
+
+    - name: Write barrier server config into proot rootfs - Tablet2
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/barrier/barrier.conf
+        content: |
+          section: screens
+              Tablet1:
+              Tablet2:
+              Tablet3:
+              Laptop-P14s:
+          end
+          section: aliases
+          end
+          section: links
+              Tablet1:
+                  right = Tablet2
+              Tablet2:
+                  left = Tablet1
+                  right = Tablet3
+                  up = Laptop-P14s
+              Tablet3:
+                  left = Tablet2
+              Laptop-P14s:
+                  down = Tablet2
+          end
+          section: options
+              screenSaverSync = false
+              clipboardSharing = false
+              switchDelay = 500
+          end
+      when: inventory_hostname == 'tablet2'
       tags: [boot, x11]
 
     - name: Remove barrierc runit service from Tablet2 (it is the server, not a client)
