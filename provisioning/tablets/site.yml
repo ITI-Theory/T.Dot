@@ -231,15 +231,26 @@
 
   tasks:
 
+    - name: Add xpra.org apt repository (not in standard Debian repos)
+      ansible.builtin.shell: |
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get install -y --no-install-recommends curl ca-certificates
+        CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+        curl -fsSL https://xpra.org/xpra.asc | sudo tee /usr/share/keyrings/xpra.asc > /dev/null
+        echo "deb [signed-by=/usr/share/keyrings/xpra.asc] https://xpra.org/ ${CODENAME} main" \
+          | sudo tee /etc/apt/sources.list.d/xpra.list > /dev/null
+        sudo apt-get update -qq
+      changed_when: false
+      tags: deb_packages
+
     - name: Apt — update and install desktop + Xpra stack
       ansible.builtin.shell: |
         export DEBIAN_FRONTEND=noninteractive
-        sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends \
           xfce4 xfce4-terminal xpra picom conky-all \
           fonts-dejavu-core fonts-liberation \
           dbus-x11 xdotool git python3 python3-venv \
-            neovim build-essential ripgrep fzf dbus-x11
+          neovim build-essential ripgrep fzf
       changed_when: false
       tags: deb_packages
 
