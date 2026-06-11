@@ -288,6 +288,15 @@
       changed_when: false
       tags: [boot, x11]
 
+    - name: Remove barrierc runit service from Tablet2 (it is the server, not a client)
+      ansible.builtin.shell: |
+        SVDIR=/data/data/com.termux/files/usr/var/service
+        sv down $SVDIR/barrierc 2>/dev/null || true
+        rm -rf $SVDIR/barrierc
+      when: inventory_hostname == 'tablet2'
+      changed_when: false
+      tags: [boot, x11]
+
     - name: Install Termux:Boot script (starts runit + wakelock on Android boot)
       ansible.builtin.shell: |
         mkdir -p {{ t_home }}/.termux/boot

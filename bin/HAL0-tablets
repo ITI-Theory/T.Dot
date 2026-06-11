@@ -115,7 +115,6 @@ _tablet_check() {
        xfce=$(sv status $SVDIR/tx11-xfce4 2>/dev/null | grep -c "^run" || echo 0)
        barriers=$(sv status $SVDIR/barriers 2>/dev/null | grep -c "^run" || echo 0)
        barrierc=$(sv status $SVDIR/barrierc 2>/dev/null | grep -c "^run" || echo 0)
-       kvm_n=$(pgrep -cx barriers 2>/dev/null || echo 0; pgrep -cx barrierc 2>/dev/null || echo 0)
        boot=$( [[ -x ~/.termux/boot/start-services.sh ]] && echo yes || echo "NO-run:boot-install" )
        echo "ssh=up sshd=$sshd_n X11=$x11 xfce-svc=$xfce barriers-svc=$barriers barrierc-svc=$barrierc boot=$boot"' \
       2>/dev/null) || { echo "  $label ($host): SSH=DOWN"; all_ok=1; continue; }
