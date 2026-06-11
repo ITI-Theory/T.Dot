@@ -188,7 +188,8 @@
       # After this sshd restarts automatically on crash — no more manual sshd.
 
     - name: Upgrade termux-x11-nightly (ensures start-xfce4.sh is present)
-      ansible.builtin.command: pkg upgrade -y termux-x11-nightly
+      ansible.builtin.shell: |
+        test -f /data/data/com.termux/files/usr/bin/start-xfce4.sh || pkg upgrade -y termux-x11-nightly
       changed_when: false
       tags: [boot, x11]
 
