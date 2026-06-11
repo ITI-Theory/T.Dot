@@ -441,7 +441,10 @@ BOOTSCRIPT
 
       local -a entries=("Tablet1:tablet1.local:$p1" "Tablet2:tablet2.local:$p2" "Tablet3:tablet3.local:$p3")
       for entry in "${entries[@]}"; do
-        local name="${entry%%:*}" rest="${entry#*:}" host="${rest%%:*}" port="${rest#*:}"
+        local name="${entry%%:*}"
+        local rest="${entry#*:}"
+        local host="${rest%%:*}"
+        local port="${rest#*:}"
         echo "--- $name ($host:$port) ---"
         local connect_out
         connect_out=$("$ADB" connect "$host:$port" 2>&1)
