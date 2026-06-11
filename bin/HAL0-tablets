@@ -14,9 +14,9 @@
 # Config
 # ---------------------------------------------------------------------------
 
-T1="u0_a304@10.133.134.207"
-T2="u0_a360@10.133.134.219"
-T3="u0_a297@10.133.134.110"
+T1="u0_a304@tablet1.local"
+T2="u0_a360@tablet2.local"
+T3="u0_a297@tablet3.local"
 SSH_OPTS="-p 8022 -o ConnectTimeout=6 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
 
 # ---------------------------------------------------------------------------
@@ -29,9 +29,9 @@ pack_tablets() {
 ## Tablet Setup Reference (3× Lenovo IdeaPad, Android/Termux)
 
 ### IPs and users
-  Tablet 1:  u0_a304 @ 10.133.134.207  port 8022
-  Tablet 2:  u0_a360 @ 10.133.134.219  port 8022
-  Tablet 3:  u0_a297 @ 10.133.134.110  port 8022
+  Tablet 1:  u0_a304 @ tablet1.local  port 8022
+  Tablet 2:  u0_a360 @ tablet2.local  port 8022
+  Tablet 3:  u0_a297 @ tablet3.local  port 8022
 
 ### Bootstrap sequence — do this in order
 
@@ -42,9 +42,10 @@ pack_tablets() {
 
   Step 2 (from P14s — once per tablet):
     ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519   # if not already done
-    ssh-copy-id -p 8022 u0_a304@10.133.134.207
-    ssh-copy-id -p 8022 u0_a360@10.133.134.219
-    ssh-copy-id -p 8022 u0_a297@10.133.134.110
+    ssh-copy-id -p 8022 u0_a304@tablet1.local
+    ssh-copy-id -p 8022 u0_a360@tablet2.local
+    ssh-copy-id -p 8022 u0_a297@tablet3.local
+    # First bootstrap (before avahi on WSL2): use the IP shown by ifconfig wlan0 on the tablet.
 
   Step 3 (from P14s — automation):
     ansible-playbook T.Dot/provisioning/tablets/site.yml
@@ -72,12 +73,12 @@ pack_tablets() {
   (NOT dbus-launch — not present in bookworm dbus package)
 
 ### KVM — Input Leap (replaces Barrier 2.4.0)
-  Server: input-leaps.exe 3.0.2 | 10.133.134.136:24800
+  Server: input-leaps.exe 3.0.2 | p14s.local:24800
   Crypto disabled — --disable-crypto on server + client
   Clipboard sharing DISABLED (crashes Barrier 2.x on screen-switch; may re-enable in IL)
   Screen layout: Tablet1 ← Laptop-P14s → Tablet3 (Tablet2 below Laptop)
   Config: C:/Users/alist/AppData/Local/Barrier/barrier.sgc (git: T.Dot/provisioning/tablets/Barrier-L.sgc)
-  Client cmd (runit service): DISPLAY=:0 barrierc --no-tray --disable-crypto --name $NAME -f 10.133.134.136
+  Client cmd (runit service): DISPLAY=:0 barrierc --no-tray --disable-crypto --name $NAME -f p14s.local
   switchDelay = 500ms (prevents accidental screen switches at edge)
 
 ### Battery optimization (CRITICAL)

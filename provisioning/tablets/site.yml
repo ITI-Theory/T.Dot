@@ -5,7 +5,7 @@
 #
 # Prerequisites (manual, ~2 commands per tablet):
 #   On each tablet:  pkg install openssh && sshd
-#   On P14s WSL2:    ssh-copy-id -p 8022 u0_aNNN@10.205.183.NNN
+#   On P14s WSL2:    ssh-copy-id -p 8022 u0_aNNN@<IP-from-ifconfig>  (first bootstrap; tablet.local after avahi provisioned)
 #
 # Run:
 #   ansible-playbook -i hosts site.yml
@@ -156,10 +156,17 @@
             xorg awesome xfce4-terminal xpra picom conky-all \
             fonts-dejavu-core fonts-liberation \
             barrier openssh-client git python3 python3-venv \
-            neovim build-essential ripgrep fzf dbus-x11
+            neovim build-essential ripgrep fzf dbus-x11 \
+            avahi-daemon libnss-mdns
         "
       # -qq removed so apt output is visible (shows progress, not frozen).
       # To suppress again: add -qq after 'apt-get update' and 'apt-get install'.
+      changed_when: false
+      tags: deb_packages
+
+    - name: Set hostname in proot Debian to {{ inventory_hostname }} (avahi mDNS advertisement)
+      ansible.builtin.command: >
+        {{ deb }} bash -c "echo {{ inventory_hostname }} > /etc/hostname"
       changed_when: false
       tags: deb_packages
 
@@ -254,7 +261,13 @@
           xfce4 xfce4-terminal xpra picom conky-all \
           fonts-dejavu-core fonts-liberation \
           dbus-x11 xdotool git python3 python3-venv \
-          neovim build-essential ripgrep fzf
+          neovim build-essential ripgrep fzf \
+          avahi-daemon libnss-mdns
+      changed_when: false
+      tags: deb_packages
+
+    - name: Enable avahi-daemon in WSL2 (resolves .local mDNS hostnames)
+      ansible.builtin.shell: sudo service avahi-daemon start 2>/dev/null || true
       changed_when: false
       tags: deb_packages
 
