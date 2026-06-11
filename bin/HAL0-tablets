@@ -112,11 +112,12 @@ _tablet_check() {
        sshd_n=$(pgrep -c sshd 2>/dev/null || echo 0)
        SVDIR=/data/data/com.termux/files/usr/var/service
        x11=$( [[ -e /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ]] && echo yes || echo no )
-       xfce=$(sv status $SVDIR/tx11-xfce4 2>/dev/null | grep -c "^run" || echo 0)
-       barriers=$(sv status $SVDIR/barriers 2>/dev/null | grep -c "^run" || echo 0)
-       barrierc=$(sv status $SVDIR/barrierc 2>/dev/null | grep -c "^run" || echo 0)
+       xfce=$(sv status $SVDIR/tx11-xfce4 2>/dev/null | grep -c "^run"; true)
+       barriers=$(sv status $SVDIR/barriers 2>/dev/null | grep -c "^run"; true)
+       barrierc=$(sv status $SVDIR/barrierc 2>/dev/null | grep -c "^run"; true)
        boot=$( [[ -x ~/.termux/boot/start-services.sh ]] && echo yes || echo "NO-run:boot-install" )
-       echo "ssh=up sshd=$sshd_n X11=$x11 xfce-svc=$xfce barriers-svc=$barriers barrierc-svc=$barrierc boot=$boot"' \
+       printf "ssh=up sshd=%s X11=%s xfce-svc=%s barriers-svc=%s barrierc-svc=%s boot=%s\n" \
+         "$sshd_n" "$x11" "$xfce" "$barriers" "$barrierc" "$boot"' \
       2>/dev/null) || { echo "  $label ($host): SSH=DOWN"; all_ok=1; continue; }
     echo "  $label ($host): $result"
   done
@@ -131,11 +132,14 @@ _do_start_one() {
   local host="$1" name="$2"
   echo "--- $name ($host) ---"
 
-  # Uses runit (termux-services) — services auto-restart, survive SSH disconnect.
-  # Required runit services on each tablet (set up via: HAL tablets boot-install):
-  #   sshd, tx11, tx11-xfce4, barrierc
-  # barrierc/run uses input-leapc client name matching the screen name.
   SVDIR=/data/data/com.termux/files/usr/var/service
+  # Determine service set locally, pass as expanded string into heredoc
+  local svcs
+  if [[ "$name" == "Tablet2" ]]; then
+    svcs="tx11 tx11-xfce4 barriers"
+  else
+    svcs="tx11 tx11-xfce4 barrierc"
+  fi
 
   ssh $SSH_OPTS "$host" bash <<ENDSSH
 echo "[start] $name — \$(date)"
@@ -149,14 +153,9 @@ else
   echo "[ok] runsvdir already running"
 fi
 
-# Bring up all required services (tablet2 = barriers server; tablet1/3 = barrierc client)
-if [[ "$name" == "Tablet2" ]]; then
-  SVCS="tx11 tx11-xfce4 barriers"
-else
-  SVCS="tx11 tx11-xfce4 barrierc"
-fi
-for svc in $SVCS; do
-  sv up $SVDIR/\$svc 2>/dev/null && echo "[ok] sv up \$svc" || echo "[warn] \$svc not found — run: HAL tablets boot-install"
+# Bring up required services ($svcs)
+for svc in $svcs; do
+  sv up $SVDIR/\$svc 2>/dev/null && echo "[ok] sv up \$svc" || echo "[warn] \$svc not found — run: HAL provision tablets --tags boot"
 done
 
 echo "[status]"
@@ -295,6 +294,26 @@ do_tablets() {
       _tablet_check
       ;;
 
+    stop)
+      # {P: tablets reachable} stop X11+XFCE4+Barrier services
+      echo "=== Stopping desktops on all tablets ==="
+      for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
+        local label="${pair%%:*}" host="${pair#*:}"
+        printf "  %s: " "$label"
+        ssh $SSH_OPTS "$host" \
+          'SVDIR=/data/data/com.termux/files/usr/var/service
+           sv down $SVDIR/barriers  2>/dev/null || true
+           sv down $SVDIR/barrierc  2>/dev/null || true
+           sv down $SVDIR/tx11-xfce4 2>/dev/null || true
+           sv down $SVDIR/tx11       2>/dev/null || true
+           echo stopped' \
+          2>/dev/null || echo "[FAILED]"
+      done
+      echo ""
+      echo "=== Post-check ==="
+      _tablet_check
+      ;;
+
     boot-install)
       # {P: tablets reachable} install termux-services + runit sshd + Termux:Boot script
       # {Q: sshd supervised by runit; ~/.termux/boot/start-services.sh in place}
@@ -353,6 +372,7 @@ HAL tablets <subcommand>
                  One-time setup already done on Laptop-P14s. UAC prompt on first call.
   start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)
                  Aborts if any tablet unreachable; post-check after
+  stop           Stop X11+XFCE4+Barrier services on all tablets
   help           This help
 TUSAGE
       ;;
