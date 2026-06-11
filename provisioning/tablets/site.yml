@@ -338,12 +338,10 @@
         #!/data/data/com.termux/files/usr/bin/bash
         # Runs at Android boot via Termux:Boot app.
         termux-wake-lock
-        # SVDIR is hardcoded — termux-services.sh may not exist at boot time
+        # SVDIR hardcoded — termux-services.sh profile.d may not exist at boot time
         SVDIR=/data/data/com.termux/files/usr/var/service
         export SVDIR
-        # Start sshd directly as fallback
-        sshd 2>/dev/null || true
-        # Start runit supervisor (manages all sv-enabled services)
+        # Start runit supervisor — manages sshd + all sv-enabled services
         runsvdir "$SVDIR" &
         EOF
         chmod +x {{ t_home }}/.termux/boot/start-services.sh
