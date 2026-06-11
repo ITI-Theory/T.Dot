@@ -72,13 +72,15 @@ pack_tablets() {
   Start inside proot: DISPLAY=:0 dbus-run-session -- xfce4-session
   (NOT dbus-launch — not present in bookworm dbus package)
 
-### KVM — Input Leap (replaces Barrier 2.4.0)
-  Server: input-leaps.exe 3.0.2 | Laptop-P14s.local:24800
-  Crypto disabled — --disable-crypto on server + client
-  Clipboard sharing DISABLED (crashes Barrier 2.x on screen-switch; may re-enable in IL)
-  Screen layout: Tablet1 ← Laptop-P14s → Tablet3 (Tablet2 below Laptop)
-  Config: C:/Users/alist/AppData/Local/Barrier/barrier.sgc (git: T.Dot/provisioning/tablets/Barrier-L.sgc)
-  Client cmd (runit service): DISPLAY=:0 barrierc --no-tray --disable-crypto --name $NAME -f Laptop-P14s.local
+### KVM — Barrier/Input Leap (Tablet2 is permanent server)
+  Server: barriers (proot Debian on Tablet2) | tablet2.local:24800  [runit: barriers]
+  Clients: Tablet1 (Tablet1 → tablet2.local), Tablet3 (Tablet3 → tablet2.local)  [runit: barrierc]
+  Windows: input-leapc.exe --no-tray --disable-crypto --name Laptop-P14s -f tablet2.local
+  Crypto disabled — --disable-crypto on all
+  Clipboard sharing DISABLED (crashes Barrier 2.x on screen-switch)
+  Screen layout:  [Tablet1] [Tablet2] [Tablet3]   (row)
+                             [P14s]                (above Tablet2)
+  Config (Tablet2 proot): /root/.config/barrier/barrier.conf  (written by Ansible)
   switchDelay = 500ms (prevents accidental screen switches at edge)
 
 ### Battery optimization (CRITICAL)
@@ -111,10 +113,11 @@ _tablet_check() {
        SVDIR=/data/data/com.termux/files/usr/var/service
        x11=$( [[ -e /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ]] && echo yes || echo no )
        xfce=$(sv status $SVDIR/tx11-xfce4 2>/dev/null | grep -c "^run" || echo 0)
+       barriers=$(sv status $SVDIR/barriers 2>/dev/null | grep -c "^run" || echo 0)
        barrierc=$(sv status $SVDIR/barrierc 2>/dev/null | grep -c "^run" || echo 0)
-       barrierc_n=$(pgrep -c barrierc 2>/dev/null || echo 0)
+       kvm_n=$(pgrep -cx barriers 2>/dev/null || echo 0; pgrep -cx barrierc 2>/dev/null || echo 0)
        boot=$( [[ -x ~/.termux/boot/start-services.sh ]] && echo yes || echo "NO-run:boot-install" )
-       echo "ssh=up sshd=$sshd_n X11=$x11 xfce-svc=$xfce barrierc-svc=$barrierc barrierc=$barrierc_n boot=$boot"' \
+       echo "ssh=up sshd=$sshd_n X11=$x11 xfce-svc=$xfce barriers-svc=$barriers barrierc-svc=$barrierc boot=$boot"' \
       2>/dev/null) || { echo "  $label ($host): SSH=DOWN"; all_ok=1; continue; }
     echo "  $label ($host): $result"
   done
@@ -147,13 +150,18 @@ else
   echo "[ok] runsvdir already running"
 fi
 
-# Bring up all required services
-for svc in tx11 tx11-xfce4 barrierc; do
+# Bring up all required services (tablet2 = barriers server; tablet1/3 = barrierc client)
+if [[ "$name" == "Tablet2" ]]; then
+  SVCS="tx11 tx11-xfce4 barriers"
+else
+  SVCS="tx11 tx11-xfce4 barrierc"
+fi
+for svc in $SVCS; do
   sv up $SVDIR/\$svc 2>/dev/null && echo "[ok] sv up \$svc" || echo "[warn] \$svc not found — run: HAL tablets boot-install"
 done
 
 echo "[status]"
-sv status $SVDIR/tx11 $SVDIR/tx11-xfce4 $SVDIR/barrierc 2>/dev/null || true
+sv status $SVDIR/tx11 $SVDIR/tx11-xfce4 $SVDIR/barriers $SVDIR/barrierc 2>/dev/null || true
 ENDSSH
 
   echo "[done] $name — tap Termux:X11 icon on tablet if desktop not visible"
