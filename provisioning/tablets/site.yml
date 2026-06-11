@@ -204,11 +204,11 @@
       changed_when: false
       tags: [boot, x11]
 
-    - name: Write runit run scripts — tx11 and tx11-xfce4 (all tablets)
+    - name: Write runit run scripts - tx11 and tx11-xfce4 (all tablets)
       ansible.builtin.shell: |
         SVDIR=/data/data/com.termux/files/usr/var/service
         # Stop services before rewriting scripts so runit doesn't auto-start on script update.
-        # sv down = stop + mark "don't restart"; HAL tablets start does sv up to resume.
+        # sv down = stop + mark "dont restart"; HAL tablets start does sv up to resume.
         sv down $SVDIR/tx11       2>/dev/null || true
         sv down $SVDIR/tx11-xfce4 2>/dev/null || true
         # tx11 -- starts Termux:X11 on fixed display :0
