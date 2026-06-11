@@ -14,6 +14,7 @@ tablet3 ansible_host=tablet3.local ansible_user=u0_a297
 [tablets:vars]
 ansible_port=8022
 ansible_python_interpreter=/data/data/com.termux/files/usr/bin/python
+ansible_remote_tmp=/data/data/com.termux/files/usr/tmp/.ansible-tmp
 ansible_become=false
 # Termux has no sudo. All tasks run as the Termux user.
 # Use proot-distro for root-requiring work inside the Debian container.
