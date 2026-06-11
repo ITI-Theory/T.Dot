@@ -151,13 +151,15 @@
       ansible.builtin.shell: |
         proot-distro login debian --bind {{ t_home }}:/termux-home -- bash -c "
           export DEBIAN_FRONTEND=noninteractive &&
-          apt-get update -qq &&
+          apt-get update &&
           apt-get install -y --no-install-recommends \
             xorg awesome xfce4-terminal xpra picom conky-all \
             fonts-dejavu-core fonts-liberation \
             barrier openssh-client git python3 python3-venv \
             neovim build-essential ripgrep fzf dbus-x11
         "
+      # -qq removed so apt output is visible (shows progress, not frozen).
+      # To suppress again: add -qq after 'apt-get update' and 'apt-get install'.
       changed_when: false
       tags: deb_packages
 
@@ -239,7 +241,9 @@
         curl -fsSL https://xpra.org/xpra.asc | sudo tee /usr/share/keyrings/xpra.asc > /dev/null
         echo "deb [signed-by=/usr/share/keyrings/xpra.asc] https://xpra.org/ ${CODENAME} main" \
           | sudo tee /etc/apt/sources.list.d/xpra.list > /dev/null
-        sudo apt-get update -qq
+        sudo apt-get update
+      # -qq removed so apt output is visible (shows progress, not frozen).
+      # To suppress again: add -qq after each apt-get update/install.
       changed_when: false
       tags: deb_packages
 
