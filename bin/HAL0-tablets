@@ -73,12 +73,12 @@ pack_tablets() {
   (NOT dbus-launch — not present in bookworm dbus package)
 
 ### KVM — Input Leap (replaces Barrier 2.4.0)
-  Server: input-leaps.exe 3.0.2 | p14s.local:24800
+  Server: input-leaps.exe 3.0.2 | Laptop-P14s.local:24800
   Crypto disabled — --disable-crypto on server + client
   Clipboard sharing DISABLED (crashes Barrier 2.x on screen-switch; may re-enable in IL)
   Screen layout: Tablet1 ← Laptop-P14s → Tablet3 (Tablet2 below Laptop)
   Config: C:/Users/alist/AppData/Local/Barrier/barrier.sgc (git: T.Dot/provisioning/tablets/Barrier-L.sgc)
-  Client cmd (runit service): DISPLAY=:0 barrierc --no-tray --disable-crypto --name $NAME -f p14s.local
+  Client cmd (runit service): DISPLAY=:0 barrierc --no-tray --disable-crypto --name $NAME -f Laptop-P14s.local
   switchDelay = 500ms (prevents accidental screen switches at edge)
 
 ### Battery optimization (CRITICAL)
