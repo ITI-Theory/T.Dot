@@ -154,8 +154,10 @@ else
 fi
 
 # Bring up required services ($svcs)
+# sv cont clears runit's internal "don't restart" flag set by sv down;
+# sv up alone is insufficient after sv down has been used.
 for svc in $svcs; do
-  sv up $SVDIR/\$svc 2>/dev/null && echo "[ok] sv up \$svc" || echo "[warn] \$svc not found — run: HAL provision tablets --tags boot"
+  sv cont $SVDIR/\$svc 2>/dev/null; sv up $SVDIR/\$svc 2>/dev/null && echo "[ok] sv up \$svc" || echo "[warn] \$svc not found — run: HAL provision tablets --tags boot"
 done
 
 echo "[status]"
