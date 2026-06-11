@@ -159,7 +159,7 @@ for svc in $svcs; do
 done
 
 echo "[status]"
-sv status $SVDIR/tx11 $SVDIR/tx11-xfce4 $SVDIR/barriers $SVDIR/barrierc 2>/dev/null || true
+for svc in $svcs; do sv status $SVDIR/\$svc 2>/dev/null || true; done
 ENDSSH
 
   echo "[done] $name — tap Termux:X11 icon on tablet if desktop not visible"
