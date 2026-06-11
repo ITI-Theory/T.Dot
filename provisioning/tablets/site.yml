@@ -192,6 +192,9 @@
       ansible.builtin.shell: |
         cat > /data/data/com.termux/files/usr/bin/start-xfce4.sh << 'EOF'
         #!/data/data/com.termux/files/usr/bin/sh
+        # Clean stale ICE/xfsm locks that prevent xfce4-session from starting after crash
+        rm -f /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/tmp/.xfsm-ICE-* \
+              /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/tmp/.ICE-unix/*
         exec proot-distro login debian \
           --bind ~/:/termux-home \
           --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
@@ -262,7 +265,7 @@
 
     - name: Write barrier server config into proot rootfs — Tablet2
       ansible.builtin.shell: |
-        ROOTFS=/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs/debian
+        ROOTFS=/data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs
         mkdir -p $ROOTFS/root/.config/barrier
         cat > $ROOTFS/root/.config/barrier/barrier.conf << 'BARRIEREOF'
         section: screens
