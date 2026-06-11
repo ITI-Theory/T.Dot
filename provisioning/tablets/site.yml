@@ -462,7 +462,7 @@
           fonts-dejavu-core fonts-liberation \
           dbus-x11 xdotool git python3 python3-venv \
           neovim build-essential ripgrep fzf \
-          avahi-daemon libnss-mdns
+          avahi-daemon libnss-mdns adb
       changed_when: false
       tags: deb_packages
 
@@ -540,12 +540,3 @@
       tags: dotfiles
       # Forwarding wrappers (not symlinks) so BASH_SOURCE[0] resolves correctly.
       # Also ensures ~/.local/bin is in PATH.
-
-    - name: Install adb (Android Debug Bridge — required for Phantom Process Killer fix)
-      ansible.builtin.shell: |
-        export DEBIAN_FRONTEND=noninteractive
-        sudo apt-get install -y adb
-      changed_when: false
-      tags: [host-tools, phantom]
-      # After install: pair each tablet once via Wireless Debugging, then:
-      #   HAL tablets fix-phantom <port1> <port2> <port3>
