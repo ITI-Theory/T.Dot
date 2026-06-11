@@ -193,6 +193,16 @@
       changed_when: false
       tags: [boot, x11]
 
+    - name: Write start-xfce4.sh (idempotent — ensures correct content regardless of pkg version)
+      ansible.builtin.shell: |
+        cat > /data/data/com.termux/files/usr/bin/start-xfce4.sh << 'EOF'
+        #!/data/data/com.termux/files/usr/bin/sh
+        exec proot-distro login debian --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- bash -c "DISPLAY=:0 xsetroot -cursor_name left_ptr 2>/dev/null; DISPLAY=:0 xrandr --fb 2560x1600 2>/dev/null; DISPLAY=:0 dbus-run-session -- xfce4-session"
+        EOF
+        chmod +x /data/data/com.termux/files/usr/bin/start-xfce4.sh
+      changed_when: false
+      tags: [boot, x11]
+
     - name: Write runit run scripts for tx11, tx11-xfce4, barrierc
       ansible.builtin.shell: |
         SVDIR=/data/data/com.termux/files/usr/var/service
