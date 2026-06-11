@@ -255,7 +255,7 @@
         cat > $SVDIR/barriers/run << 'EOF'
         #!/data/data/com.termux/files/usr/bin/sh
         exec proot-distro login debian --no-sysvipc --bind ~/:/termux-home --bind /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix -- \
-          bash --norc --noprofile -c "DISPLAY=:0 barriers --no-tray --disable-crypto --config /root/.config/barrier/barrier.conf -f"
+          bash --norc --noprofile -c "DISPLAY=:0 barriers --no-tray --disable-crypto --name Tablet2 --config /root/.config/barrier/barrier.conf -f"
         EOF
         chmod +x $SVDIR/barriers/run
         sv-enable barriers 2>/dev/null || true
