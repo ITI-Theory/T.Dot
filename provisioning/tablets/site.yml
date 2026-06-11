@@ -1,7 +1,7 @@
 ---
 # Tablet provisioning playbook
 # Targets: 3× Lenovo IdeaPad tablets running Termux (Android)
-# Controller: P14s WSL2 (Debian)
+# Controller: P14s WSL2 (Debian trixie)
 #
 # Prerequisites (manual, ~2 commands per tablet):
 #   On each tablet:  pkg install openssh && sshd
