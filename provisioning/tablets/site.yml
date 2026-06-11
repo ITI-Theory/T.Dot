@@ -387,52 +387,10 @@
       ansible.builtin.debug:
         msg: "{{ inventory_hostname }}: {{ xpra_ver.stdout }}"
       tags: xpra
-
-    - name: Connect to {{ inventory_hostname }} via ADB over Wi-Fi (delegate to WSL2 controller)
-      ansible.builtin.command: >
-        adb connect {{ ansible_host }}:{{ adb_port | default('5555') }}
-      delegate_to: localhost
-      changed_when: false
-      register: adb_connect
-      failed_when: "'connected' not in adb_connect.stdout"
-      tags: phantom
-      # Prerequisites (one-time per tablet):
-      #   1. Developer Options → Wireless Debugging → "Pair device with pairing code"
-      #   2. adb pair <tablet-ip>:<pair-port>   (enter 6-digit code shown on screen)
-      #   3. Note port shown under "IP address & Port"; pass as:
-      #        ansible-playbook ... --tags phantom -e adb_port=<port>
-      #      Default adb_port=5555 works if you did 'adb tcpip 5555' via USB first.
-      #   Or use: HAL tablets fix-phantom <p1> <p2> <p3>  (simpler)
-
-    - name: Disable Android Phantom Process Killer on {{ inventory_hostname }}
-      ansible.builtin.command: >
-        adb -s {{ ansible_host }}:{{ adb_port | default('5555') }} shell
-        settings put global settings_enable_monitor_phantom_procs 0
-      delegate_to: localhost
-      changed_when: false
-      tags: phantom
-
-    - name: Set max_phantom_processes to INT_MAX on {{ inventory_hostname }}
-      ansible.builtin.command: >
-        adb -s {{ ansible_host }}:{{ adb_port | default('5555') }} shell
-        settings put global max_phantom_processes 2147483647
-      delegate_to: localhost
-      changed_when: false
-      tags: phantom
-
-    - name: Verify phantom process setting on {{ inventory_hostname }}
-      ansible.builtin.command: >
-        adb -s {{ ansible_host }}:{{ adb_port | default('5555') }} shell
-        settings get global settings_enable_monitor_phantom_procs
-      delegate_to: localhost
-      changed_when: false
-      register: phantom_check
-      tags: phantom
-
-    - name: Show Phantom Process Killer status
-      ansible.builtin.debug:
-        msg: "{{ inventory_hostname }}: settings_enable_monitor_phantom_procs={{ phantom_check.stdout }} (0=disabled OK)"
-      tags: phantom
+    # Phantom Process Killer fix is handled by HAL (not Ansible) because it
+    # requires ADB Wireless Debugging pairing and raw IPs — use:
+    #   HAL tablets pair <pp1> <pp2> <pp3>   (one-time)
+    #   HAL tablets fix-phantom <cp1> <cp2> <cp3>
 
 - name: P14s WSL2 — XFCE stack, direct install (Debian)
   hosts: wsl2
