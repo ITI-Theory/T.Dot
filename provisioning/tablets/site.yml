@@ -414,6 +414,28 @@
       changed_when: false
       tags: [boot, x11]
 
+    - name: Write xfwm4 xfconf to disable compositing (llvmpipe GL crashes xfwm4 on these tablets)
+      ansible.builtin.file:
+        path: "{{ deb_rootfs }}/root/.config/xfce4/xfconf/xfce-perchannel-xml"
+        state: directory
+        mode: '0755'
+      vars:
+        deb_rootfs: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs
+      tags: [boot, x11]
+
+    - name: Write xfwm4.xml - disable compositing
+      ansible.builtin.copy:
+        dest: /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml
+        content: |
+          <?xml version="1.0" encoding="UTF-8"?>
+          <channel name="xfwm4" version="1.0">
+            <property name="general" type="empty">
+              <property name="use_compositing" type="bool" value="false"/>
+              <property name="vblank_mode" type="string" value="off"/>
+            </property>
+          </channel>
+      tags: [boot, x11]
+
     - name: Link dotfiles into Debian home (all via /termux-home — single repo copy)
       ansible.builtin.command: >
         {{ deb }} bash -c "
