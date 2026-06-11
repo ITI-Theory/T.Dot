@@ -333,11 +333,14 @@
         cat > {{ t_home }}/.termux/boot/start-services.sh << 'EOF'
         #!/data/data/com.termux/files/usr/bin/bash
         # Runs at Android boot via Termux:Boot app.
-        # Acquires wakelock so Termux stays alive with screen off.
         termux-wake-lock
-        # Start runit service supervisor (manages sshd + any sv-enabled services)
-        . $PREFIX/etc/profile.d/termux-services.sh
-        runsvdir $SVDIR &
+        # SVDIR is hardcoded — termux-services.sh may not exist at boot time
+        SVDIR=/data/data/com.termux/files/usr/var/service
+        export SVDIR
+        # Start sshd directly as fallback
+        sshd 2>/dev/null || true
+        # Start runit supervisor (manages all sv-enabled services)
+        runsvdir "$SVDIR" &
         EOF
         chmod +x {{ t_home }}/.termux/boot/start-services.sh
       changed_when: false
