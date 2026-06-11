@@ -297,6 +297,33 @@
       changed_when: false
       tags: [boot, x11]
 
+    - name: Request battery optimization exemption for Termux + Termux:X11
+      ansible.builtin.shell: |
+        /system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS \
+          -d 'package:com.termux' 2>/dev/null || true
+        sleep 2
+        /system/bin/am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS \
+          -d 'package:com.termux.x11' 2>/dev/null || true
+      changed_when: false
+      tags: boot
+      # Shows an Allow/Deny dialog on the tablet screen — user must tap Allow.
+      # Cannot be silently automated on Android 12+.
+      # Run this task with the tablet screen ON and unlocked.
+
+    - name: Check battery optimization exemption status
+      ansible.builtin.shell: |
+        termux=$(dumpsys deviceidle whitelist 2>/dev/null | grep -c 'com.termux$' || echo 0)
+        x11=$(dumpsys deviceidle whitelist 2>/dev/null | grep -c 'com.termux.x11' || echo 0)
+        echo "termux=$termux termux.x11=$x11"
+      register: battery_status
+      changed_when: false
+      tags: boot
+
+    - name: Show battery exemption status (termux=1 x11=1 means OK)
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} battery: {{ battery_status.stdout }} — if 0, tap Allow on tablet screen and re-run"
+      tags: boot
+
     - name: Install Termux:Boot script (starts runit + wakelock on Android boot)
       ansible.builtin.shell: |
         mkdir -p {{ t_home }}/.termux/boot
