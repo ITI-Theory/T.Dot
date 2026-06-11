@@ -397,6 +397,9 @@ Usage:
   HAL0 tablets boot-install  Install termux-services runit sshd + Termux:Boot script (one-time)
   HAL0 tablets start [N] Start X11+XFCE4+Barrier (pre+post check, aborts if down)
   HAL0 tablets sshd      Restart sshd on all 3 tablets + post-check
+  HAL0 tablets fix-phantom [p1 p2 p3]
+                         Disable Android 12+ Phantom Process Killer via ADB (default port: 5555)
+                         Prerequisites: adb pair <ip>:<pair-port> once per tablet
   HAL0 sync              Pull --ff-only on all known repos (pull-first discipline)
   HAL0 provision [limit] Run Ansible playbook against this machine.
                          limit: wsl2 (default on WSL2) or tablets (default on Termux)

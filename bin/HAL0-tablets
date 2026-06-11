@@ -360,6 +360,67 @@ BOOTSCRIPT
       _tablet_check
       ;;
 
+    fix-phantom)
+      # {P: adb installed, tablets paired via Wireless Debugging}
+      # Disable Android 12+ Phantom Process Killer on all tablets via ADB.
+      # {Q: settings_enable_monitor_phantom_procs=0, max_phantom_processes=2147483647}
+      #
+      # Prerequisites (one-time per tablet):
+      #   1. Developer Options → Wireless Debugging → tap "Pair device with pairing code"
+      #   2. adb pair <tablet-ip>:<pair-port>  (enter 6-digit code shown on tablet)
+      #   3. Note port under "IP address & Port" — pass as args below
+      #
+      # Usage:
+      #   HAL tablets fix-phantom                    # tries port 5555 on all tablets
+      #   HAL tablets fix-phantom <p1> <p2> <p3>     # explicit per-tablet ports
+      local p1="${1:-5555}" p2="${2:-5555}" p3="${3:-5555}"
+      echo "=== Disabling Phantom Process Killer on all tablets ==="
+      echo "    Ports: Tablet1=$p1  Tablet2=$p2  Tablet3=$p3"
+      echo ""
+
+      local ADB=""
+      # WSL2: prefer adb in PATH (installed via: sudo apt-get install adb)
+      # Fall back to Windows adb.exe via WSL interop
+      if command -v adb &>/dev/null; then
+        ADB="$(command -v adb)"
+      elif [[ -f "/mnt/c/Users/alist/AppData/Local/Android/Sdk/platform-tools/adb.exe" ]]; then
+        ADB="/mnt/c/Users/alist/AppData/Local/Android/Sdk/platform-tools/adb.exe"
+      else
+        echo "[ABORT] adb not found."
+        echo "        Install on WSL2: sudo apt-get install -y adb"
+        echo "        Or via Ansible: wsl -d Debian -- bash -l -c 'HAL provision wsl2 --tags phantom'"
+        return 1
+      fi
+      echo "  adb: $ADB"
+      echo ""
+
+      local -a entries=("Tablet1:tablet1.local:$p1" "Tablet2:tablet2.local:$p2" "Tablet3:tablet3.local:$p3")
+      for entry in "${entries[@]}"; do
+        local name="${entry%%:*}" rest="${entry#*:}" host="${rest%%:*}" port="${rest#*:}"
+        echo "--- $name ($host:$port) ---"
+        local connect_out
+        connect_out=$("$ADB" connect "$host:$port" 2>&1)
+        if echo "$connect_out" | grep -qE 'connected|already connected'; then
+          echo "  [ok] $connect_out"
+        else
+          echo "  [WARN] connect failed: $connect_out"
+          echo "         → pair first: adb pair $host:<pair-port>  (6-digit code in Wireless Debugging)"
+          echo "           then retry: HAL tablets fix-phantom with correct port"
+          continue
+        fi
+        "$ADB" -s "$host:$port" shell settings put global settings_enable_monitor_phantom_procs 0 \
+          && echo "  [ok] settings_enable_monitor_phantom_procs=0" \
+          || echo "  [FAIL] write failed — ensure device is authorized (check: adb devices)"
+        "$ADB" -s "$host:$port" shell settings put global max_phantom_processes 2147483647 \
+          && echo "  [ok] max_phantom_processes=2147483647" \
+          || echo "  [FAIL] write failed"
+        local check
+        check=$("$ADB" -s "$host:$port" shell settings get global settings_enable_monitor_phantom_procs 2>&1)
+        echo "  verify: settings_enable_monitor_phantom_procs=$check (want: 0)"
+        echo ""
+      done
+      ;;
+
     help|*)
       cat <<'TUSAGE'
 HAL tablets <subcommand>
@@ -378,6 +439,12 @@ HAL tablets <subcommand>
   start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)
                  Aborts if any tablet unreachable; post-check after
   stop           Stop X11+XFCE4+Barrier services on all tablets
+  fix-phantom [p1 p2 p3]
+                 Disable Android 12+ Phantom Process Killer via ADB.
+                 Ports optional (default: 5555). Pass port shown in:
+                   Developer Options → Wireless Debugging → "IP address & Port"
+                 Prerequisites (one-time per tablet):
+                   adb pair <tablet-ip>:<pair-port>  (6-digit code in Wireless Debugging)
   help           This help
 TUSAGE
       ;;
