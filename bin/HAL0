@@ -345,9 +345,12 @@ do_provision() {
   local playbook="$REPO_ROOT/provisioning/tablets/site.yml"
   local inventory="$REPO_ROOT/provisioning/tablets/hosts"
 
+  # Always pull T.Dot before provisioning — ensures playbook is current
+  echo "[HAL] Syncing T.Dot before provision..."
+  git -C "$REPO_ROOT" pull --ff-only 2>&1 | sed 's/^/  /'
+
   if [[ ! -f "$playbook" ]]; then
     echo "[HAL] ERROR: playbook not found at $playbook" >&2
-    echo "[HAL] Run: git -C $REPO_ROOT pull" >&2
     exit 1
   fi
 
