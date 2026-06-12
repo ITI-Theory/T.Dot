@@ -491,6 +491,72 @@ BOOTSCRIPT
       done
       ;;
 
+    ping)
+      # mDNS + SSH reachability diagnostic for all 3 tablets
+      echo "=== Tablet ping diagnostic ==="
+      echo ""
+
+      # 1. avahi running?
+      if ! pgrep -x avahi-daemon > /dev/null 2>&1; then
+        echo "FAIL [pre] avahi-daemon not running on this machine."
+        echo "     Fix: sudo service avahi-daemon start  (then retry)"
+        return 1
+      fi
+      echo "ok   [pre] avahi-daemon running"
+
+      # 2. dnsTunneling check (WSL2 only)
+      local wslcfg="/mnt/c/Users/alist/.wslconfig"
+      if [[ -f "$wslcfg" ]]; then
+        if grep -q "dnsTunneling=true" "$wslcfg"; then
+          echo "FAIL [pre] .wslconfig dnsTunneling=true — breaks .local mDNS"
+          echo "     Fix: set dnsTunneling=false in $wslcfg, then: wsl --shutdown"
+          return 1
+        elif grep -q "dnsTunneling=false" "$wslcfg"; then
+          echo "ok   [pre] dnsTunneling=false confirmed"
+        else
+          echo "WARN [pre] dnsTunneling not explicitly set — default=true may cause .local failures"
+        fi
+      fi
+      echo ""
+
+      local all_ok=0
+      for pair in "Tablet1:tablet1.local:$T1" "Tablet2:tablet2.local:$T2" "Tablet3:tablet3.local:$T3"; do
+        local label="${pair%%:*}" rest="${pair#*:}"
+        local hostname="${rest%%:*}" sshhost="${rest#*:}"
+        echo "--- $label ($hostname) ---"
+
+        # Step 1: avahi-resolve
+        local ip
+        ip=$(avahi-resolve -4 -n "$hostname" 2>/dev/null | awk '{print $2}') || true
+        if [[ -z "$ip" ]]; then
+          echo "  FAIL [1] avahi-resolve $hostname — no result"
+          echo "       Is Termux running on $label? Is avahi installed in proot Debian?"
+          all_ok=1; echo ""; continue
+        fi
+        echo "  ok   [1] $hostname → $ip"
+
+        # Step 2: ping the resolved IP
+        if ping -c1 -W1 "$ip" > /dev/null 2>&1; then
+          echo "  ok   [2] ping $ip — success"
+        else
+          echo "  FAIL [2] ping $ip — unreachable"
+          all_ok=1; echo ""; continue
+        fi
+
+        # Step 3: SSH connect
+        if ssh $SSH_OPTS "$sshhost" 'echo ok' > /dev/null 2>&1; then
+          echo "  ok   [3] SSH $sshhost — connected"
+        else
+          echo "  FAIL [3] SSH $sshhost — refused/timeout"
+          echo "       Open Termux on $label and run: sshd"
+          all_ok=1
+        fi
+        echo ""
+      done
+
+      [[ $all_ok -eq 0 ]] && echo "All tablets reachable." || echo "One or more tablets failed — see above."
+      ;;
+
     help|*)
       cat <<'TUSAGE'
 HAL tablets <subcommand>
@@ -503,6 +569,9 @@ HAL tablets <subcommand>
   boot-install   Install termux-services, enable runit sshd, write Termux:Boot script
                  (one-time setup — sshd then auto-restarts on crash and Android boot)
                  Requires: Termux:Boot APK installed (F-Droid or GitHub sideload)
+  ping           mDNS + SSH diagnostic for all 3 tablets
+                 Steps per tablet: avahi-resolve → ping → SSH connect
+                 Pre-check: avahi running, dnsTunneling=false
   sshd           Restart sshd on all tablets + post-check
   barrier-server DEPRECATED — use: HAL host start barrier
   start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)
