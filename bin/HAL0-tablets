@@ -638,6 +638,8 @@ BOOTSCRIPT
       echo "  Contents:"
       grep -v '^#' "$HAL_TABLET_IP_CACHE" | sed 's/^/    /'
       ;;
+
+    help|*)
       cat <<'TUSAGE'
 HAL tablets <subcommand>
 
@@ -653,7 +655,7 @@ HAL tablets <subcommand>
                  Steps per tablet: avahi-resolve → ping → SSH connect
                  Pre-check: avahi running, dnsTunneling=false
                  Falls back to cached IP if avahi-resolve fails
-  save-ips       Save current tablet IPs to ~/.config/hal/tablet-ips
+  save-ips       Save current tablet IPs to ~/.cache/hal/tablet-ips
                  Run when tablets are reachable; used as fallback by ping/check
   sshd           Restart sshd on all tablets + post-check
   barrier-server DEPRECATED — use: HAL host start barrier
