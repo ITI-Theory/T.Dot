@@ -157,7 +157,7 @@
             fonts-dejavu-core fonts-liberation \
             barrier openssh-client git python3 python3-venv \
             neovim build-essential ripgrep fzf dbus-x11 \
-            avahi-daemon libnss-mdns
+            avahi-daemon avahi-utils libnss-mdns
         "
       # -qq removed so apt output is visible (shows progress, not frozen).
       # To suppress again: add -qq after 'apt-get update' and 'apt-get install'.
@@ -525,7 +525,7 @@
           X-XFCE-Source=file:///usr/share/applications/xfce4-appfinder.desktop
       tags: [boot, x11]
 
-
+    - name: Create dotlinks in proot Debian
       ansible.builtin.command: >
         {{ deb }} bash -c "
           mkdir -p /root/.config/picom /root/.config/awesome /root/.local/bin &&
@@ -586,7 +586,7 @@
           fonts-dejavu-core fonts-liberation \
           dbus-x11 xdotool git python3 python3-venv \
           neovim build-essential ripgrep fzf \
-          avahi-daemon libnss-mdns adb
+          avahi-daemon avahi-utils libnss-mdns adb
       changed_when: false
       tags: deb_packages
 
