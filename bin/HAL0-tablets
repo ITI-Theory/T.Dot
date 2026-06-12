@@ -24,7 +24,7 @@ SSH_OPTS="-p 8022 -o ConnectTimeout=6 -o BatchMode=yes -o ServerAliveInterval=30
 # ---------------------------------------------------------------------------
 
 pack_tablets() {
-  section "PACK: tablets — Tablet bootstrap & Xpra reference"
+  section "PACK: tablets — Tablet bootstrap & Termux:X11 reference"
   cat <<'TABLETS'
 ## Tablet Setup Reference (3× Lenovo IdeaPad, Android/Termux)
 
@@ -51,10 +51,10 @@ pack_tablets() {
     ansible-playbook T.Dot/provisioning/tablets/site.yml
     # Installs: proot-distro, Debian bookworm, XFCE4, Barrier, dotfiles
 
-  Step 4 (Barrier — Windows side):
-    Barrier GUI → Configure Server → add Tablet1/Tablet2/Tablet3 in grid
-    Screen name on each client must match exactly (capital T)
-    SSL must be disabled: uncheck "Enable SSL" in GUI + --disable-crypto on client
+  Step 4 (Barrier / InputLeap — host election):
+    HAL host start barrier   → elect this machine as Barrier server (advertises via avahi)
+    HAL tablets start        → each tablet auto-discovers the server and joins as client
+    On Windows (P14s): run HAL host start barrier from WSL2, not Git Bash
 
 ### proot-distro
   Container name: debian  (Debian bookworm)
@@ -72,16 +72,20 @@ pack_tablets() {
   Start inside proot: DISPLAY=:0 dbus-run-session -- xfce4-session
   (NOT dbus-launch — not present in bookworm dbus package)
 
-### KVM — Barrier/Input Leap (Tablet2 is permanent server)
-  Server: barriers (proot Debian on Tablet2) | tablet2.local:24800  [runit: barriers]
-  Clients: Tablet1 (Tablet1 → tablet2.local), Tablet3 (Tablet3 → tablet2.local)  [runit: barrierc]
-  Windows: input-leapc.exe --no-tray --disable-crypto --name Laptop-P14s -f tablet2.local
+### KVM — Barrier/InputLeap (dynamic host election)
+  Host: elected via avahi — first machine to run 'HAL host start barrier' advertises _barrier._tcp
+  Server role: any machine (P14s WSL2 or any tablet proot Debian)
+    barriers runit svc on tablets: $SVDIR/barriers
+    input-leaps.exe on WSL2/Windows: started by HAL0-host
+  Clients: all other machines auto-discover host via avahi-browse _barrier._tcp
+    Tablets join as barrierc (runit svc $SVDIR/barrierc)
+    P14s WSL2 joins via input-leapc.exe (launched by HAL0-wsl2 startx)
   Crypto disabled — --disable-crypto on all
   Clipboard sharing DISABLED (crashes Barrier 2.x on screen-switch)
   Screen layout:  [Tablet1] [Tablet2] [Tablet3]   (row)
                              [P14s]                (above Tablet2)
-  Config (Tablet2 proot): /root/.config/barrier/barrier.conf  (written by Ansible)
   switchDelay = 500ms (prevents accidental screen switches at edge)
+  Config written by Ansible: /root/.config/barrier/barrier.conf (in proot Debian)
 
 ### Battery optimization (CRITICAL)
   Android kills Termux when screen turns off unless exempted.
@@ -500,8 +504,7 @@ HAL tablets <subcommand>
                  (one-time setup — sshd then auto-restarts on crash and Android boot)
                  Requires: Termux:Boot APK installed (F-Droid or GitHub sideload)
   sshd           Restart sshd on all tablets + post-check
-  barrier-server Start Barrier service if not running (Windows service, auto on boot)
-                 One-time setup already done on Laptop-P14s. UAC prompt on first call.
+  barrier-server DEPRECATED — use: HAL host start barrier
   start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)
                  Aborts if any tablet unreachable; post-check after
   stop           Stop X11+XFCE4+Barrier services on all tablets

@@ -200,7 +200,7 @@ do_notes() {
       echo "HAL notes <topic>"
       echo ""
       echo "Available topics:"
-      echo "  tablets   — tablet IPs, bootstrap sequence, Xpra, Ansible, roles"
+      echo "  tablets   — tablet IPs, bootstrap sequence, Termux:X11, Ansible, roles"
       echo "  dotfiles  — which dotfile repo is authoritative for which device"
       echo "  stack     — full device stack: what runs on P14s WSL2 vs tablets"
       ;;
@@ -213,8 +213,8 @@ _notes_dotfiles() {
 ## Dotfile repo lane assignments (decided 2026-05-31)
 
   U.Dot (ITI-Theory/U.Dot)   — AUTHORITATIVE for all U-lane machines:
-                                  - P14s WSL2 (Arch + XFCE4)  ← only notebook
-                                  - Tablets (PRoot Arch, via Ansible)
+                                  - P14s WSL2 (Debian trixie + XFCE4 + awesomeWM)
+                                  - Tablets (PRoot Debian bookworm, via Ansible)
                                 Contains: i3/config, picom/picom.conf,
                                           bash/{MINGW64,ubuntu}/, bin/HAL1
 
@@ -272,7 +272,6 @@ _notes_stack() {
                        Android APK: manual sideload required
                          → https://github.com/termux/termux-x11/releases
                          Download .apk, install on tablet, launch before starting X apps
-    xpra client      — auto-attaches to elected host session (HAL tablets start)
     InputLeap client — auto-connects to elected host (HAL tablets start)
     Python/OSC       — receives field state from server
 
@@ -303,6 +302,23 @@ _notes_stack() {
   Tablet 3:        TouchDesigner preview / fractal mirror
 
 STACK
+}
+
+# ---------------------------------------------------------------------------
+# HAL status — aggregate state check across all subsystems
+# ---------------------------------------------------------------------------
+
+do_status() {
+  banner "HAL status — $(date '+%Y-%m-%d %H:%M')"
+
+  section "HOST"
+  _host_status_check
+
+  section "WSL2"
+  _wsl2_status_check
+
+  section "TABLETS"
+  _tablet_check
 }
 
 # ---------------------------------------------------------------------------
@@ -403,10 +419,10 @@ Usage:
                            lean     — all U/paper/proofs .lean proof files
                            process  — U/PROCESS.md in full
                            issues   — open GitHub issues across T.Ops, U, U.Ops
-                           tablets  — tablet IPs, bootstrap, Xpra, Ansible reference
+                           tablets  — tablet IPs, bootstrap, Termux:X11, Ansible reference
                          Combine: HAL prime papers lean
   HAL0 notes <topic>     Quick reference for a topic (no AI context — just the facts)
-                           tablets   — tablet bootstrap sequence, Xpra, IPs, roles
+                           tablets   — tablet bootstrap sequence, Termux:X11, IPs, roles
                            dotfiles  — which repo is authoritative for which device
                            stack     — full device stack: WSL2 vs tablets, InputLeap, Xpra
   HAL0 tablets check     Full state: ssh/sshd/X11/xfce/barrier per tablet
@@ -430,6 +446,7 @@ Usage:
   HAL0 host stop [xpra] [barrier]
                          Stop host servers + withdraw avahi advertisements
   HAL0 host check        Show host state (expected vs actual)
+  HAL0 status            Aggregate state: host + wsl2 + tablets in one view
   HAL0 sync              Pull --ff-only on all known repos (pull-first discipline)
   HAL0 provision [limit] Run Ansible playbook against this machine.
                          limit: wsl2 (default on WSL2) or tablets (default on Termux)
@@ -497,6 +514,7 @@ case "$cmd" in
   notes)     _hal_selftest --quiet || exit 1; do_notes "${1:-}" ;;
   tablets)   _hal_selftest --quiet || exit 1; do_tablets "$@" ;;
   wsl2)      _hal_selftest --quiet || exit 1; do_wsl2 "$@" ;;
+  status)    _hal_selftest --quiet || exit 1; do_status ;;
   host)      _hal_selftest --quiet || exit 1; do_host "$@" ;;
   help|-h|--help) usage ;;
   *)
