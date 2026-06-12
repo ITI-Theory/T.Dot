@@ -629,7 +629,14 @@ BOOTSCRIPT
           echo "$hostname → $ip  [saved]"
           saved=$((saved+1))
         else
-          echo "unreachable — skipped"
+          # Preserve existing cached entry (including hand-edited values)
+          local old_ip; old_ip=$(_tablet_cached_ip "$hostname") || true
+          if [[ -n "$old_ip" ]]; then
+            echo "$hostname $old_ip" >> "$tmpfile"
+            echo "unreachable — kept cached $old_ip"
+          else
+            echo "unreachable — no cached IP"
+          fi
         fi
       done
       mv "$tmpfile" "$HAL_TABLET_IP_CACHE"
