@@ -7,9 +7,9 @@
 #   ansible -i hosts tablets -m ping    # connectivity check
 
 [tablets]
-tablet1 ansible_host=tablet1.local ansible_user=u0_a304
-tablet2 ansible_host=tablet2.local ansible_user=u0_a360
-tablet3 ansible_host=tablet3.local ansible_user=u0_a297
+tablet1 ansible_host=10.197.86.207 ansible_user=u0_a304
+tablet2 ansible_host=10.197.86.219 ansible_user=u0_a360
+tablet3 ansible_host=10.197.86.110 ansible_user=u0_a297
 
 [tablets:vars]
 ansible_port=8022
