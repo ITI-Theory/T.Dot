@@ -34,13 +34,13 @@ _host_hostname() {
 # ---------------------------------------------------------------------------
 
 _find_existing_xpra_host() {
-  avahi-browse -t -r _xpra._tcp 2>/dev/null \
+  timeout 3 avahi-browse -t -r _xpra._tcp 2>/dev/null \
     | awk '/hostname/ {h=$3} /^=/ && h { print h; h="" }' \
     | grep -v "^$" | head -1
 }
 
 _find_existing_barrier_host() {
-  avahi-browse -t -r _barrier._tcp 2>/dev/null \
+  timeout 3 avahi-browse -t -r _barrier._tcp 2>/dev/null \
     | awk '/hostname/ {h=$3} /^=/ && h { print h; h="" }' \
     | grep -v "^$" | head -1
 }
@@ -61,11 +61,11 @@ _host_status_check() {
   if pgrep -f "xpra start" > /dev/null 2>&1 || xpra list 2>/dev/null | grep -q "^LIVE"; then
     local sessions
     sessions=$(xpra list 2>/dev/null | grep "^LIVE" | head -3)
-    echo "running  [expected: running as host]"
+    echo "running  [this machine is host]"
     echo "    sessions: ${sessions:-none}"
     echo "    clients attach: xpra attach ssh://$me.local:$XPRA_PORT"
   else
-    echo "not running  [expected: running — run: HAL host start xpra]"
+    echo "not running  (to start: HAL host start xpra)"
   fi
 
   # --- avahi xpra advertisement ---
@@ -74,21 +74,21 @@ _host_status_check() {
   existing_xpra=$(_find_existing_xpra_host)
   if [[ -n "$existing_xpra" ]]; then
     if [[ "$existing_xpra" == "$me"* ]]; then
-      echo "advertising ($me.local) ✓"
+      echo "advertising ($me.local) — this machine is host ✓"
     else
-      echo "advertising — but from $existing_xpra (not this machine)"
+      echo "host found: $existing_xpra"
     fi
   else
-    echo "not advertising  [expected: advertising as host]"
+    echo "no host on LAN  (to start: HAL host start xpra)"
   fi
 
   # --- Barrier/InputLeap server ---
   printf "  barrier server: "
   if _is_wsl2; then
     if tasklist.exe 2>/dev/null | grep -qi 'input-leaps'; then
-      echo "running (input-leaps.exe)  [expected: running as host]"
+      echo "running (input-leaps.exe)  [this machine is host]"
     else
-      echo "not running  [expected: running — run: HAL host start barrier]"
+      echo "not running  (to start: HAL host start barrier)"
     fi
   else
     # Termux proot Debian
@@ -96,9 +96,9 @@ _host_status_check() {
     local barriers_n
     barriers_n=$(sv status "$SVDIR/barriers" 2>/dev/null | grep -c "^run" || echo 0)
     if [[ "$barriers_n" -gt 0 ]]; then
-      echo "running (barriers runit svc)  [expected: running as host]"
+      echo "running (barriers runit svc)  [this machine is host]"
     else
-      echo "not running  [expected: running — run: HAL host start barrier]"
+      echo "not running  (to start: HAL host start barrier)"
     fi
   fi
 
@@ -108,12 +108,12 @@ _host_status_check() {
   existing_barrier=$(_find_existing_barrier_host)
   if [[ -n "$existing_barrier" ]]; then
     if [[ "$existing_barrier" == "$me"* ]]; then
-      echo "advertising ($me.local) ✓"
+      echo "advertising ($me.local) — this machine is host ✓"
     else
-      echo "advertising — but from $existing_barrier (not this machine)"
+      echo "host found: $existing_barrier"
     fi
   else
-    echo "not advertising  [expected: advertising as host]"
+    echo "no host on LAN  (to start: HAL host start barrier)"
   fi
 }
 

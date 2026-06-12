@@ -20,14 +20,14 @@ X_DISPLAY=:0       # VcXsrv display
 # ---------------------------------------------------------------------------
 
 _discover_xpra_host() {
-  avahi-browse -t -r _xpra._tcp 2>/dev/null \
+  timeout 3 avahi-browse -t -r _xpra._tcp 2>/dev/null \
     | awk '/hostname/ {h=$3} /port/ {p=$3} /address/ {a=$3} \
            /^=/ && h && p { printf "%s:%s\n", h, p; h=""; p=""; a="" }' \
     | head -1
 }
 
 _discover_barrier_host() {
-  avahi-browse -t -r _barrier._tcp 2>/dev/null \
+  timeout 3 avahi-browse -t -r _barrier._tcp 2>/dev/null \
     | awk '/hostname/ {h=$3} /port/ {p=$3} /address/ {a=$3} \
            /^=/ && h && p { printf "%s:%s\n", h, p; h=""; p=""; a="" }' \
     | head -1
