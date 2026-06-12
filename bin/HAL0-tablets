@@ -19,6 +19,19 @@ T2="u0_a360@tablet2.local"
 T3="u0_a297@tablet3.local"
 SSH_OPTS="-p 8022 -o ConnectTimeout=6 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
 
+# IP cache — fallback when .local mDNS is broken
+# Populated by: HAL tablets save-ips
+# Format: tablet1.local 192.168.x.y
+HAL_TABLET_IP_CACHE="${HOME}/.cache/hal/tablet-ips"
+
+_tablet_cached_ip() {
+  # $1 = hostname e.g. "tablet1.local" — returns cached IP or empty
+  [[ -f "$HAL_TABLET_IP_CACHE" ]] || return 1
+  local ip
+  ip=$(awk -v h="$1" '$1==h{print $2; exit}' "$HAL_TABLET_IP_CACHE") || true
+  [[ -n "$ip" ]] && echo "$ip"
+}
+
 # ---------------------------------------------------------------------------
 # Notes pack (used by: HAL prime tablets)
 # ---------------------------------------------------------------------------
@@ -107,23 +120,46 @@ TABLETS
 _tablet_check() {
   # Prints one status line per tablet to stdout.
   # Returns 0 only if ALL three are reachable over SSH.
+  # Tries .local first, falls back to cached IP if .local is down.
   local all_ok=0
-  for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
-    local label="${pair%%:*}" host="${pair#*:}"
-    local result
-    result=$(ssh $SSH_OPTS "$host" \
-      'SOCK=/data/data/com.termux/files/usr/tmp/tmux.sock
+  local _status_cmd='SVDIR=/data/data/com.termux/files/usr/var/service
        sshd_n=$(pgrep -c sshd 2>/dev/null || echo 0)
-       SVDIR=/data/data/com.termux/files/usr/var/service
        x11=$( [[ -e /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ]] && echo yes || echo no )
        xfce=$(sv status $SVDIR/tx11-xfce4 2>/dev/null | grep -c "^run"; true)
        barriers=$(sv status $SVDIR/barriers 2>/dev/null | grep -c "^run"; true)
        barrierc=$(sv status $SVDIR/barrierc 2>/dev/null | grep -c "^run"; true)
        boot=$( [[ -x ~/.termux/boot/start-services.sh ]] && echo yes || echo "NO-run:boot-install" )
        printf "ssh=up sshd=%s X11=%s xfce-svc=%s barriers-svc=%s barrierc-svc=%s boot=%s\n" \
-         "$sshd_n" "$x11" "$xfce" "$barriers" "$barrierc" "$boot"' \
-      2>/dev/null) || { echo "  $label ($host): SSH=DOWN"; all_ok=1; continue; }
-    echo "  $label ($host): $result"
+         "$sshd_n" "$x11" "$xfce" "$barriers" "$barrierc" "$boot"'
+
+  for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
+    local label="${pair%%:*}" host="${pair#*:}"
+    local user="${host%%@*}" hostname="${host##*@}"
+    local result addr="$host" reached=0
+
+    # 1. Try .local
+    result=$(ssh $SSH_OPTS "$addr" "$_status_cmd" 2>/dev/null) && reached=1
+
+    # 2. Try cached IP
+    if [[ $reached -eq 0 ]]; then
+      local ip; ip=$(_tablet_cached_ip "$hostname") || true
+      if [[ -n "$ip" ]]; then
+        addr="${user}@${ip}"
+        result=$(ssh $SSH_OPTS "$addr" "$_status_cmd" 2>/dev/null) && reached=1
+      fi
+    fi
+
+    if [[ $reached -eq 1 ]]; then
+      echo "  $label ($addr): $result"
+    else
+      local cached_ip; cached_ip=$(_tablet_cached_ip "$hostname") || true
+      if [[ -n "$cached_ip" ]]; then
+        echo "  $label ($hostname): SSH=DOWN  (.local + cached $cached_ip both failed)"
+      else
+        echo "  $label ($hostname): SSH=DOWN  (no cached IP — run: HAL tablets save-ips when reachable)"
+      fi
+      all_ok=1
+    fi
   done
   return $all_ok
 }
@@ -525,15 +561,23 @@ BOOTSCRIPT
         local hostname="${rest%%:*}" sshhost="${rest#*:}"
         echo "--- $label ($hostname) ---"
 
-        # Step 1: avahi-resolve
+        # Step 1: avahi-resolve (with cached IP fallback)
         local ip
         ip=$(avahi-resolve -4 -n "$hostname" 2>/dev/null | awk '{print $2}') || true
         if [[ -z "$ip" ]]; then
-          echo "  FAIL [1] avahi-resolve $hostname — no result"
-          echo "       Is Termux running on $label? Is avahi installed in proot Debian?"
-          all_ok=1; echo ""; continue
+          # Try cached IP before giving up
+          local cached_ip; cached_ip=$(_tablet_cached_ip "$hostname") || true
+          if [[ -n "$cached_ip" ]]; then
+            echo "  WARN [1] avahi-resolve $hostname failed — trying cached IP $cached_ip"
+            ip="$cached_ip"
+          else
+            echo "  FAIL [1] avahi-resolve $hostname — no result, no cached IP"
+            echo "       On $label: open Termux → ifconfig wlan0 → note IP → run: HAL tablets save-ips"
+            all_ok=1; echo ""; continue
+          fi
+        else
+          echo "  ok   [1] $hostname → $ip"
         fi
-        echo "  ok   [1] $hostname → $ip"
 
         # Step 2: ping the resolved IP
         if ping -c1 -W1 "$ip" > /dev/null 2>&1; then
@@ -557,7 +601,43 @@ BOOTSCRIPT
       [[ $all_ok -eq 0 ]] && echo "All tablets reachable." || echo "One or more tablets failed — see above."
       ;;
 
-    help|*)
+    save-ips)
+      # {P: at least some tablets reachable via SSH}
+      # Save current IPs to cache file for future fallback use.
+      # Run this whenever tablets are reachable so the cache stays fresh.
+      echo "=== Saving tablet IPs to $HAL_TABLET_IP_CACHE ==="
+      mkdir -p "$(dirname "$HAL_TABLET_IP_CACHE")"
+      local tmpfile="$HAL_TABLET_IP_CACHE.tmp"
+      echo "# tablet-ip cache — updated: $(date '+%Y-%m-%d %H:%M')" > "$tmpfile"
+      echo "# run: HAL tablets save-ips   to refresh" >> "$tmpfile"
+      local saved=0
+      for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
+        local label="${pair%%:*}" host="${pair#*:}"
+        local hostname="${host##*@}" user="${host%%@*}"
+        printf "  %s: " "$label"
+        # Try .local first, then existing cached IP
+        local addr="$host"
+        local ip
+        ip=$(ssh $SSH_OPTS "$addr" 'echo $SSH_CONNECTION' 2>/dev/null | cut -d' ' -f3) || true
+        if [[ -z "$ip" ]]; then
+          local old_ip; old_ip=$(_tablet_cached_ip "$hostname") || true
+          [[ -n "$old_ip" ]] && addr="${user}@${old_ip}"
+          ip=$(ssh $SSH_OPTS "$addr" 'echo $SSH_CONNECTION' 2>/dev/null | cut -d' ' -f3) || true
+        fi
+        if [[ -n "$ip" ]]; then
+          echo "$hostname $ip" >> "$tmpfile"
+          echo "$hostname → $ip  [saved]"
+          saved=$((saved+1))
+        else
+          echo "unreachable — skipped"
+        fi
+      done
+      mv "$tmpfile" "$HAL_TABLET_IP_CACHE"
+      echo ""
+      echo "  Saved $saved/3 IPs to $HAL_TABLET_IP_CACHE"
+      echo "  Contents:"
+      grep -v '^#' "$HAL_TABLET_IP_CACHE" | sed 's/^/    /'
+      ;;
       cat <<'TUSAGE'
 HAL tablets <subcommand>
 
@@ -572,6 +652,9 @@ HAL tablets <subcommand>
   ping           mDNS + SSH diagnostic for all 3 tablets
                  Steps per tablet: avahi-resolve → ping → SSH connect
                  Pre-check: avahi running, dnsTunneling=false
+                 Falls back to cached IP if avahi-resolve fails
+  save-ips       Save current tablet IPs to ~/.config/hal/tablet-ips
+                 Run when tablets are reachable; used as fallback by ping/check
   sshd           Restart sshd on all tablets + post-check
   barrier-server DEPRECATED — use: HAL host start barrier
   start [N]      Start X11+XFCE4+Barrier on all tablets (or just 1/2/3)

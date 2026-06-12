@@ -425,6 +425,7 @@ Usage:
                            tablets   — tablet bootstrap sequence, Termux:X11, IPs, roles
                            dotfiles  — which repo is authoritative for which device
                            stack     — full device stack: WSL2 vs tablets, InputLeap, Xpra
+  HAL0 tablets save-ips     Save tablet IPs to ~/.config/hal/tablet-ips (use when reachable)
   HAL0 tablets ping      mDNS + SSH diagnostic: avahi-resolve → ping → SSH per tablet
   HAL0 tablets check     Full state: ssh/sshd/X11/xfce/barrier per tablet
   HAL0 tablets battery   Open battery-optimization exemption dialog on all 3 tablets
