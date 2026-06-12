@@ -71,7 +71,7 @@ _host_status_check() {
   # --- avahi xpra advertisement ---
   printf "  avahi xpra:    "
   local existing_xpra
-  existing_xpra=$(_find_existing_xpra_host)
+  existing_xpra=$(_find_existing_xpra_host) || true
   if [[ -n "$existing_xpra" ]]; then
     if [[ "$existing_xpra" == "$me"* ]]; then
       echo "advertising ($me.local) — this machine is host ✓"
@@ -105,7 +105,7 @@ _host_status_check() {
   # --- avahi barrier advertisement ---
   printf "  avahi barrier:  "
   local existing_barrier
-  existing_barrier=$(_find_existing_barrier_host)
+  existing_barrier=$(_find_existing_barrier_host) || true
   if [[ -n "$existing_barrier" ]]; then
     if [[ "$existing_barrier" == "$me"* ]]; then
       echo "advertising ($me.local) — this machine is host ✓"
@@ -267,8 +267,8 @@ do_host() {
 
       # Abort if another host already exists
       local existing_xpra existing_barrier
-      existing_xpra=$(_find_existing_xpra_host)
-      existing_barrier=$(_find_existing_barrier_host)
+      existing_xpra=$(_find_existing_xpra_host) || true
+      existing_barrier=$(_find_existing_barrier_host) || true
       local me; me=$(_host_hostname)
 
       if [[ -n "$existing_xpra" && "$existing_xpra" != "$me"* ]]; then

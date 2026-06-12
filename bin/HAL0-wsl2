@@ -84,8 +84,8 @@ _wsl2_status_check() {
 
   # --- host discovery ---
   local xpra_host barrier_host
-  xpra_host=$(_discover_xpra_host)
-  barrier_host=$(_discover_barrier_host)
+  xpra_host=$(_discover_xpra_host) || true
+  barrier_host=$(_discover_barrier_host) || true
 
   printf "  xpra:     "
   if pgrep -x xpra > /dev/null 2>&1; then
@@ -184,7 +184,7 @@ _start_desktop() {
 
 _attach_xpra() {
   local host
-  host=$(_discover_xpra_host)
+  host=$(_discover_xpra_host) || true
   if [[ -z "$host" ]]; then
     echo "[info] No xpra host found on LAN — skipping attach (standalone mode)"
     return 0
@@ -205,7 +205,7 @@ _attach_xpra() {
 
 _attach_barrier() {
   local host_full host port
-  host_full=$(_discover_barrier_host)
+  host_full=$(_discover_barrier_host) || true
   if [[ -z "$host_full" ]]; then
     echo "[info] No barrier host found on LAN — skipping (standalone mode)"
     return 0
