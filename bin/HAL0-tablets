@@ -32,6 +32,18 @@ _tablet_cached_ip() {
   [[ -n "$ip" ]] && echo "$ip"
 }
 
+_tablet_addr() {
+  # $1 = user@hostname — returns user@cached-ip if available, else user@hostname
+  local host="$1"
+  local user="${host%%@*}" hostname="${host##*@}"
+  local ip; ip=$(_tablet_cached_ip "$hostname") || true
+  if [[ -n "$ip" ]]; then
+    echo "${user}@${ip}"
+  else
+    echo "$host"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Notes pack (used by: HAL prime tablets)
 # ---------------------------------------------------------------------------
@@ -170,7 +182,8 @@ _tablet_check() {
 
 _do_start_one() {
   local host="$1" name="$2"
-  echo "--- $name ($host) ---"
+  local addr; addr=$(_tablet_addr "$host")
+  echo "--- $name ($addr) ---"
 
   SVDIR=/data/data/com.termux/files/usr/var/service
 
@@ -179,7 +192,7 @@ _do_start_one() {
   # If a host is already present, this tablet joins as a client.
   # Detection runs locally on the tablet (avahi inside proot Debian).
   local barrier_host_found
-  barrier_host_found=$(ssh $SSH_OPTS "$host" \
+  barrier_host_found=$(ssh $SSH_OPTS "$addr" \
     'proot-distro login debian -- avahi-browse -t -r _barrier._tcp 2>/dev/null | grep -c hostname || echo 0' \
     2>/dev/null || echo 0)
 
@@ -192,7 +205,7 @@ _do_start_one() {
     echo "[info] no barrier host found — starting as server"
   fi
 
-  ssh $SSH_OPTS "$host" bash <<ENDSSH
+  ssh $SSH_OPTS "$addr" bash <<ENDSSH
 echo "[start] $name — \$(date)"
 termux-wake-lock 2>/dev/null && echo "[ok] wakelock" || echo "[warn] wakelock failed (not fatal)"
 
@@ -254,8 +267,9 @@ do_tablets() {
       echo "Current whitelist status:"
       for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
         local label="${pair%%:*}" host="${pair#*:}"
+        local addr; addr=$(_tablet_addr "$host")
         printf "  %s: " "$label"
-        ssh $SSH_OPTS "$host" \
+        ssh $SSH_OPTS "$addr" \
           'dumpsys deviceidle whitelist 2>/dev/null | grep -E "termux" || echo "NOT whitelisted"' \
           2>/dev/null || echo "[SSH DOWN]"
       done
@@ -300,8 +314,9 @@ do_tablets() {
       echo "=== Restarting sshd on all tablets ==="
       for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
         local label="${pair%%:*}" host="${pair#*:}"
+        local addr; addr=$(_tablet_addr "$host")
         printf "  %s: " "$label"
-        ssh $SSH_OPTS "$host" 'pkill sshd 2>/dev/null; sleep 1; sshd && echo "[ok]"' \
+        ssh $SSH_OPTS "$addr" 'pkill sshd 2>/dev/null; sleep 1; sshd && echo "[ok]"' \
           || echo "[FAILED] connect failed"
       done
       echo ""
@@ -314,8 +329,9 @@ do_tablets() {
       echo "=== Stopping desktops on all tablets ==="
       for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
         local label="${pair%%:*}" host="${pair#*:}"
+        local addr; addr=$(_tablet_addr "$host")
         printf "  %s: " "$label"
-        ssh $SSH_OPTS "$host" 'bash -s' <<'STOPSSH' && echo "stopped" || echo "[FAILED]"
+        ssh $SSH_OPTS "$addr" 'bash -s' <<'STOPSSH' && echo "stopped" || echo "[FAILED]"
 SVDIR=/data/data/com.termux/files/usr/var/service
 _sv_down() { [ -d "$1" ] && sv down "$1" 2>/dev/null; return 0; }
 _sv_down $SVDIR/barriers
@@ -356,8 +372,9 @@ STOPSSH
       echo ""
       for pair in "Tablet1:$T1" "Tablet2:$T2" "Tablet3:$T3"; do
         local label="${pair%%:*}" host="${pair#*:}"
-        echo "--- $label ($host) ---"
-        ssh $SSH_OPTS "$host" 'bash -s' <<'BOOTSCRIPT' || { echo "  [ABORT] $label — see above"; continue; }
+        local addr; addr=$(_tablet_addr "$host")
+        echo "--- $label ($addr) ---"
+        ssh $SSH_OPTS "$addr" 'bash -s' <<'BOOTSCRIPT' || { echo "  [ABORT] $label — see above"; continue; }
 # Pre-check: Termux:Boot APK must be installed for ~/.termux/boot/ to fire
 if pm list packages 2>/dev/null | grep -q 'com.termux.boot'; then
   echo "[ok] Termux:Boot APK installed"
