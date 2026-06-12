@@ -595,6 +595,51 @@
       changed_when: false
       tags: deb_packages
 
+    - name: Verify mDNS resolves Laptop-P14s.local (IPv4)
+      # Check order:
+      #   1. avahi-daemon running       → fix: sudo service avahi-daemon start
+      #   2. dnsTunneling=false in .wslconfig → fix: add line + wsl --shutdown
+      #   3. avahi-resolve -4 returns IPv4  → fix: see above
+      #   4. ping that IP succeeds
+      ansible.builtin.shell: |
+        # 1. avahi running?
+        if ! pgrep -x avahi-daemon > /dev/null 2>&1; then
+          echo "FAIL: avahi-daemon is not running."
+          echo "  Fix: sudo service avahi-daemon start"
+          exit 1
+        fi
+        echo "ok: avahi-daemon running"
+
+        # 2. dnsTunneling=false in .wslconfig?
+        wslcfg="/mnt/c/Users/alist/.wslconfig"
+        if [[ -f "$wslcfg" ]]; then
+          if grep -q "dnsTunneling=true" "$wslcfg"; then
+            echo "FAIL: .wslconfig has dnsTunneling=true — Windows intercepts .local queries, returns fe80:: IPv6."
+            echo "  Fix: set dnsTunneling=false in $wslcfg, then: wsl --shutdown"
+            exit 1
+          elif grep -q "dnsTunneling=false" "$wslcfg"; then
+            echo "ok: dnsTunneling=false confirmed"
+          else
+            echo "warn: dnsTunneling not set in .wslconfig (default=true in mirrored mode — may cause .local issues)"
+            echo "  Fix: add under [experimental]: dnsTunneling=false"
+          fi
+        else
+          echo "warn: .wslconfig not found at $wslcfg — skipping dnsTunneling check"
+        fi
+
+        # 3+4. resolve + ping
+        ip=$(avahi-resolve -4 -n Laptop-P14s.local 2>/dev/null | awk '{print $2}')
+        if [[ -z "$ip" ]]; then
+          echo "FAIL: Laptop-P14s.local did not resolve to an IPv4 address."
+          echo "  Check: avahi-resolve -n Laptop-P14s.local"
+          echo "  If result is fe80::... → dnsTunneling is still intercepting."
+          exit 1
+        fi
+        ping -c1 -W1 "$ip" > /dev/null 2>&1 || { echo "FAIL: resolved $ip but ping failed (IPv6 interference?)"; exit 1; }
+        echo "ok: Laptop-P14s.local → $ip"
+      changed_when: false
+      tags: deb_packages
+
     - name: Ensure repo directory structure in WSL2 Linux FS
       ansible.builtin.file:
         path: "~/prj/git/ITI-Theory"

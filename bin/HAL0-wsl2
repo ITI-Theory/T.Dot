@@ -1,0 +1,370 @@
+#!/usr/bin/env bash
+# HAL0-wsl2 — WSL2 desktop implementation module
+# Called via HAL0 dispatch. Never invoke directly.
+#
+# Defines: do_wsl2
+#          _wsl2_status_check  — prints state, returns 0 if all expected services up
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
+VCXSRV_EXE="/c/Program Files/VcXsrv/vcxsrv.exe"
+VCXSRV_CFG="$(dirname "$0")/config.xlaunch"
+XPRA_DISPLAY=:10   # Xpra session display (used when this machine is host)
+X_DISPLAY=:0       # VcXsrv display
+
+# ---------------------------------------------------------------------------
+# Internal: discover host (xpra server) via avahi
+# Returns host:port or empty string
+# ---------------------------------------------------------------------------
+
+_discover_xpra_host() {
+  avahi-browse -t -r _xpra._tcp 2>/dev/null \
+    | awk '/hostname/ {h=$3} /port/ {p=$3} /address/ {a=$3} \
+           /^=/ && h && p { printf "%s:%s\n", h, p; h=""; p=""; a="" }' \
+    | head -1
+}
+
+_discover_barrier_host() {
+  avahi-browse -t -r _barrier._tcp 2>/dev/null \
+    | awk '/hostname/ {h=$3} /port/ {p=$3} /address/ {a=$3} \
+           /^=/ && h && p { printf "%s:%s\n", h, p; h=""; p=""; a="" }' \
+    | head -1
+}
+
+# ---------------------------------------------------------------------------
+# Internal: state check
+# ---------------------------------------------------------------------------
+
+_wsl2_status_check() {
+  local all_ok=0
+
+  # --- services ---
+  printf "  avahi:    "
+  if pgrep -x avahi-daemon > /dev/null 2>&1; then
+    echo "running [expected: running]"
+  else
+    echo "DEAD      [expected: running]  fix: sudo service avahi-daemon start"
+    all_ok=1
+  fi
+
+  printf "  dbus:     "
+  if pgrep -x dbus-daemon > /dev/null 2>&1; then
+    echo "running [expected: running]"
+  else
+    echo "DEAD      [expected: running]  fix: sudo service dbus start"
+    all_ok=1
+  fi
+
+  # --- X server (VcXsrv) ---
+  printf "  VcXsrv:   "
+  if tasklist.exe 2>/dev/null | grep -qi 'vcxsrv'; then
+    echo "running [expected: running when startx used]"
+  else
+    echo "not running [expected: running after HAL wsl2 startx]"
+  fi
+
+  # --- desktop (XFCE4 on :0) ---
+  printf "  XFCE4:    "
+  if DISPLAY="$X_DISPLAY" xfce4-session --version > /dev/null 2>&1 \
+     || pgrep -x xfce4-session > /dev/null 2>&1; then
+    echo "running"
+  else
+    echo "not running"
+  fi
+
+  # --- awesomeWM ---
+  printf "  awesome:  "
+  if pgrep -x awesome > /dev/null 2>&1; then
+    echo "running"
+  else
+    echo "not running"
+  fi
+
+  # --- host discovery ---
+  local xpra_host barrier_host
+  xpra_host=$(_discover_xpra_host)
+  barrier_host=$(_discover_barrier_host)
+
+  printf "  xpra:     "
+  if pgrep -x xpra > /dev/null 2>&1; then
+    local sessions
+    sessions=$(xpra list 2>/dev/null | grep -v "^$" | head -3)
+    echo "running  [sessions: ${sessions:-none}]"
+  elif [[ -n "$xpra_host" ]]; then
+    # Check if attached
+    if pgrep -f "xpra attach" > /dev/null 2>&1; then
+      echo "attached → $xpra_host  [expected: attached to host]"
+    else
+      echo "not attached  [expected: attached to $xpra_host]  fix: HAL wsl2 startx"
+      all_ok=1
+    fi
+  else
+    echo "not running  [no host found on LAN — standalone mode]"
+  fi
+
+  printf "  barrier:  "
+  if tasklist.exe 2>/dev/null | grep -qi 'input-leaps'; then
+    echo "server running (this machine is host)"
+  elif pgrep -f "input-leapc\|barrierc" > /dev/null 2>&1; then
+    echo "client running → ${barrier_host:-unknown}"
+  elif [[ -n "$barrier_host" ]]; then
+    echo "not connected  [expected: connected to $barrier_host]  fix: HAL wsl2 startx"
+    all_ok=1
+  else
+    echo "not running  [no host found — standalone mode]"
+  fi
+
+  return $all_ok
+}
+
+# ---------------------------------------------------------------------------
+# Internal: start VcXsrv full-screen
+# ---------------------------------------------------------------------------
+
+_start_vcxsrv() {
+  if tasklist.exe 2>/dev/null | grep -qi 'vcxsrv'; then
+    echo "[ok] VcXsrv already running"
+    return 0
+  fi
+
+  if [[ ! -f "$VCXSRV_EXE" ]]; then
+    echo "[ABORT] VcXsrv not found at: $VCXSRV_EXE"
+    echo "        Download: https://sourceforge.net/projects/vcxsrv/"
+    return 1
+  fi
+
+  if [[ -f "$VCXSRV_CFG" ]]; then
+    echo "[info] Starting VcXsrv with config.xlaunch..."
+    powershell.exe -NoProfile -Command \
+      "Start-Process '${VCXSRV_EXE//\//\\\\}' -ArgumentList '${VCXSRV_CFG//\//\\\\}' -WindowStyle Normal" \
+      2>/dev/null
+  else
+    echo "[info] Starting VcXsrv full-screen (no config.xlaunch found)..."
+    powershell.exe -NoProfile -Command \
+      "Start-Process '${VCXSRV_EXE//\//\\\\}' -ArgumentList ':0','-fullscreen','-clipboard','-ac','-multimonitors','-nodrop' -WindowStyle Normal" \
+      2>/dev/null
+  fi
+
+  sleep 2
+  if tasklist.exe 2>/dev/null | grep -qi 'vcxsrv'; then
+    echo "[ok] VcXsrv started"
+  else
+    echo "[WARN] VcXsrv did not start — check manually"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Internal: start desktop (XFCE4 + awesomeWM) on VcXsrv :0
+# ---------------------------------------------------------------------------
+
+_start_desktop() {
+  export DISPLAY="$X_DISPLAY"
+  if pgrep -x xfce4-session > /dev/null 2>&1; then
+    echo "[ok] XFCE4 session already running"
+    return 0
+  fi
+  echo "[info] Starting XFCE4 session on $X_DISPLAY..."
+  nohup dbus-run-session -- xfce4-session > /tmp/xfce4-wsl2.log 2>&1 &
+  disown
+  sleep 3
+  if pgrep -x xfce4-session > /dev/null 2>&1; then
+    echo "[ok] XFCE4 started"
+  else
+    echo "[WARN] XFCE4 did not start — see /tmp/xfce4-wsl2.log"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Internal: attach xpra client to discovered host
+# ---------------------------------------------------------------------------
+
+_attach_xpra() {
+  local host
+  host=$(_discover_xpra_host)
+  if [[ -z "$host" ]]; then
+    echo "[info] No xpra host found on LAN — skipping attach (standalone mode)"
+    return 0
+  fi
+  if pgrep -f "xpra attach" > /dev/null 2>&1; then
+    echo "[ok] xpra already attached to $host"
+    return 0
+  fi
+  echo "[info] Attaching xpra → $host ..."
+  nohup xpra attach "ssh://$host" --title="Xpra @$host" > /tmp/xpra-attach.log 2>&1 &
+  disown
+  echo "[ok] xpra attach launched (ssh://$host)"
+}
+
+# ---------------------------------------------------------------------------
+# Internal: attach barrier client to discovered host
+# ---------------------------------------------------------------------------
+
+_attach_barrier() {
+  local host_full host port
+  host_full=$(_discover_barrier_host)
+  if [[ -z "$host_full" ]]; then
+    echo "[info] No barrier host found on LAN — skipping (standalone mode)"
+    return 0
+  fi
+  host="${host_full%%:*}"
+  if pgrep -f "input-leapc\|barrierc" > /dev/null 2>&1; then
+    echo "[ok] barrier client already running → $host"
+    return 0
+  fi
+  local il_exe="/c/Program Files/InputLeap/input-leapc.exe"
+  if [[ ! -f "$il_exe" ]]; then
+    echo "[WARN] input-leapc.exe not found — skipping barrier attach"
+    return 0
+  fi
+  echo "[info] Attaching barrier client → $host ..."
+  powershell.exe -NoProfile -Command \
+    "Start-Process '${il_exe//\//\\\\}' -ArgumentList '--no-tray','--disable-crypto','--name','Laptop-P14s','-f','$host' -WindowStyle Hidden" \
+    2>/dev/null
+  echo "[ok] barrier client launched → $host"
+}
+
+# ---------------------------------------------------------------------------
+# do_wsl2 — public dispatcher
+# ---------------------------------------------------------------------------
+
+do_wsl2() {
+  local sub="${1:-help}"
+  shift || true
+
+  # Always show state first (except help)
+  if [[ "$sub" != "help" ]]; then
+    echo "=== State ==="
+    _wsl2_status_check
+    echo ""
+  fi
+
+  case "$sub" in
+
+    check|status)
+      # State already printed
+      ;;
+
+    start)
+      # {P: —} start avahi + dbus {Q: both running}
+      echo "=== Starting WSL2 services ==="
+      pgrep -x avahi-daemon > /dev/null 2>&1 \
+        && echo "[ok] avahi-daemon already running" \
+        || { sudo service avahi-daemon start 2>/dev/null && echo "[ok] avahi-daemon started"; }
+      pgrep -x dbus-daemon > /dev/null 2>&1 \
+        && echo "[ok] dbus already running" \
+        || { sudo service dbus start 2>/dev/null && echo "[ok] dbus started"; }
+      echo ""
+      echo "=== Post-check ==="
+      _wsl2_status_check
+      ;;
+
+    stop)
+      # Stop non-essential services only (avahi is kept — tablets depend on it)
+      echo "=== Stopping WSL2 non-essential services ==="
+      echo "[info] avahi-daemon kept running (tablets need mDNS resolution)"
+      echo "[info] To stop avahi too: sudo service avahi-daemon stop"
+      ;;
+
+    startx)
+      # {P: avahi running} start VcXsrv + XFCE4 + discover + attach xpra + barrier
+      if ! pgrep -x avahi-daemon > /dev/null 2>&1; then
+        echo "[ABORT] avahi-daemon not running — run: HAL wsl2 start"
+        return 1
+      fi
+      echo "=== Starting X desktop ==="
+      _start_vcxsrv || return 1
+      _start_desktop || return 1
+      echo ""
+      echo "=== Discovering and attaching to host ==="
+      _attach_xpra
+      _attach_barrier
+      echo ""
+      echo "=== Post-check ==="
+      _wsl2_status_check
+      ;;
+
+    stopx)
+      # {P: —} stop desktop + VcXsrv
+      echo "=== Stopping X desktop ==="
+      pkill -x xfce4-session  2>/dev/null && echo "[ok] xfce4-session killed" || true
+      pkill -x awesome        2>/dev/null && echo "[ok] awesome killed"       || true
+      pkill -f "xpra attach"  2>/dev/null && echo "[ok] xpra attach killed"   || true
+      pkill -f "input-leapc"  2>/dev/null && echo "[ok] barrier client killed" || true
+      tasklist.exe 2>/dev/null | grep -qi 'vcxsrv' \
+        && taskkill.exe /F /IM vcxsrv.exe > /dev/null 2>&1 \
+        && echo "[ok] VcXsrv killed" || true
+      echo ""
+      echo "=== Post-check ==="
+      _wsl2_status_check
+      ;;
+
+    ping)
+      # 4-step mDNS diagnostic (avahi → dnsTunneling → resolve → ping)
+      echo "=== mDNS diagnostic ==="
+
+      # 1. avahi running?
+      if ! pgrep -x avahi-daemon > /dev/null 2>&1; then
+        echo "FAIL [1] avahi-daemon is not running."
+        echo "     Fix: sudo service avahi-daemon start"
+        return 1
+      fi
+      echo "ok   [1] avahi-daemon running"
+
+      # 2. dnsTunneling check
+      local wslcfg="/mnt/c/Users/alist/.wslconfig"
+      if [[ -f "$wslcfg" ]]; then
+        if grep -q "dnsTunneling=true" "$wslcfg"; then
+          echo "FAIL [2] .wslconfig has dnsTunneling=true — Windows intercepts .local → fe80:: IPv6"
+          echo "     Fix: set dnsTunneling=false in $wslcfg, then: wsl --shutdown"
+          return 1
+        elif grep -q "dnsTunneling=false" "$wslcfg"; then
+          echo "ok   [2] dnsTunneling=false confirmed"
+        else
+          echo "WARN [2] dnsTunneling not set — default=true in mirrored mode, may cause .local issues"
+          echo "     Fix: add under [experimental]: dnsTunneling=false"
+        fi
+      else
+        echo "WARN [2] .wslconfig not found — skipping dnsTunneling check"
+      fi
+
+      # 3. resolve Laptop-P14s.local
+      local ip
+      ip=$(avahi-resolve -4 -n Laptop-P14s.local 2>/dev/null | awk '{print $2}')
+      if [[ -z "$ip" ]]; then
+        echo "FAIL [3] Laptop-P14s.local did not resolve to IPv4"
+        echo "     Check: avahi-resolve -n Laptop-P14s.local"
+        return 1
+      fi
+      echo "ok   [3] Laptop-P14s.local → $ip"
+
+      # 4. ping (no -4: tests that IPv6 is not in the way)
+      ping -c1 -W1 "$ip" > /dev/null 2>&1 \
+        && echo "ok   [4] ping $ip — success" \
+        || { echo "FAIL [4] ping $ip failed (IPv6 interference?)"; return 1; }
+      ;;
+
+    help|*)
+      cat <<'WUSAGE'
+HAL wsl2 <subcommand>
+
+  Every subcommand prints current state first (expected vs actual).
+
+  start      Start avahi + dbus services
+  stop       Stop non-essential services (avahi kept — tablets need it)
+  startx     VcXsrv full-screen :0 → XFCE4 + awesomeWM
+              → auto-discover host via avahi → attach xpra + barrier client
+              Standalone-safe: if no host found, starts desktop only
+  stopx      Kill desktop (XFCE4, awesome, xpra attach, barrier client, VcXsrv)
+  ping       4-step mDNS diagnostic: avahi → dnsTunneling → resolve → ping
+  check      Show state only (alias: status)
+  help       This help
+
+  State columns: actual [expected]  — mismatch indicates what to fix
+WUSAGE
+      ;;
+  esac
+}

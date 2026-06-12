@@ -243,27 +243,27 @@ DOTFILES
 _notes_stack() {
   section "NOTES: stack — device stack overview"
   cat <<'STACK'
-## Device stack (as of 2026-05-31)
+## Device stack (as of 2026-06)
 
 ### P14s (Lenovo ThinkPad P14s — primary machine)
   OS:      Windows 11
-  WSL2:    Arch Linux + XFCE4 + i3 + picom + conky
-  Dotfiles: U.Dot (i3, picom, bash)
+  WSL2:    Debian (trixie) + XFCE4 + awesomeWM
+  Dotfiles: U.Dot
   Key apps (Windows):
     Ableton Live Suite  — audio engine
     Bome MIDI Translator Pro  — MIDI routing (Twisters → virtual port)
     Bitfocus Companion  — Stream Deck XL control
-    InputLeap server    — keyboard/mouse sharing SERVER (shares P14s kbd+mouse)
-    VcXsrv              — X server for WSL2 display
+    InputLeap server    — keyboard/mouse sharing (when WSL2 is elected host)
+    VcXsrv              — full-screen X server for WSL2 display (config.xlaunch in T.Dot/bin)
     AutoHotKey          — key remapping (¦→|, knob→WSL2 bridge)
-  Key apps (WSL2 Arch):
+  Key apps (WSL2 Debian):
     Python field server  — soma-field instrument core
-    xpra                 — display teleportation (start sessions here)
-    InputLeap client     — receives kbd/mouse from server when needed
+    xpra                 — auto-attaches to elected host session (HAL wsl2 startx)
+    InputLeap client     — auto-connects to elected host (HAL wsl2 startx)
 
 ### 3× Lenovo IdeaPad Tablets
   OS:      Android + Termux
-  Layer:   PRoot → Arch Linux + XFCE4 + xpra + picom + conky
+  Layer:   proot → Debian (bookworm) + XFCE4 + awesomeWM
   Dotfiles: U.Dot (via Ansible symlinks)
   IPs:     .207 (u0_a304) | .219 (u0_a360) | .110 (u0_a297)
   Key apps:
@@ -272,23 +272,28 @@ _notes_stack() {
                        Android APK: manual sideload required
                          → https://github.com/termux/termux-x11/releases
                          Download .apk, install on tablet, launch before starting X apps
-    xpra client      — attach to sessions running on P14s WSL2
-    InputLeap client — shares P14s keyboard/mouse onto tablet screen
+    xpra client      — auto-attaches to elected host session (HAL tablets start)
+    InputLeap client — auto-connects to elected host (HAL tablets start)
     Python/OSC       — receives field state from server
 
-### Keyboard/mouse sharing: InputLeap
-  Consensus across multiple chat sessions: InputLeap is the current
-  active maintained project (Synergy → Barrier → InputLeap lineage).
-  Server: P14s Windows (shares the physical Keychron + trackball)
-  Clients: WSL2 Arch + all 3 tablets (Termux PRoot Arch)
+### Host election (dynamic — no hardcoded server)
+  Any machine can be elected host: HAL host start
+  Host advertises via avahi: _xpra._tcp (port 6010) + _barrier._tcp (port 24800)
+  Clients discover automatically during HAL wsl2 startx / HAL tablets start
+  Current host: run 'avahi-browse -t _xpra._tcp' to see who is advertising
+
+### Keyboard/mouse sharing: InputLeap (Barrier lineage)
+  Synergy → Barrier → InputLeap — current active maintained fork.
+  Server: elected host machine (HAL host start barrier)
+  Clients: all other machines — auto-connect via avahi discovery
   Mouse slides off screen edge → control moves to next device.
   Shared clipboard included.
   Install: https://github.com/input-leap/input-leap
 
 ### Display teleportation: Xpra
-  Start a session on P14s WSL2, view/interact from any tablet.
-  App runs on P14s CPU; only the pixels travel over LAN.
-  See: HAL notes tablets
+  Elected host runs Xpra server :10 (HAL host start xpra)
+  All other machines auto-attach (HAL wsl2 startx / HAL tablets start)
+  App runs on host CPU; only pixels travel over LAN.
 
 ### Soma-field instrument roles per device
   P14s (Windows):  Ableton Live + Bome + Companion
@@ -305,6 +310,18 @@ STACK
 # ---------------------------------------------------------------------------
 
 _hal_source HAL0-tablets
+
+# ---------------------------------------------------------------------------
+# HAL wsl2 — WSL2 desktop commands (source from HAL0-wsl2)
+# ---------------------------------------------------------------------------
+
+_hal_source HAL0-wsl2
+
+# ---------------------------------------------------------------------------
+# HAL host — host role election (source from HAL0-host)
+# ---------------------------------------------------------------------------
+
+_hal_source HAL0-host
 
 # ---------------------------------------------------------------------------
 # HAL sync — pull-first across all known repos
@@ -401,6 +418,18 @@ Usage:
                          Disable Android 12+ Phantom Process Killer via ADB (default port: 5555)
   HAL0 tablets pair <pp1> <pp2> <pp3>
                          One-time ADB Wireless pairing (runs adb pair interactively per tablet)
+  HAL0 wsl2 start        Start avahi + dbus services
+  HAL0 wsl2 stop         Stop non-essential services
+  HAL0 wsl2 startx       VcXsrv full-screen → XFCE4 + awesomeWM → auto-attach xpra + barrier
+  HAL0 wsl2 stopx        Kill desktop, VcXsrv, xpra attach, barrier client
+  HAL0 wsl2 ping         4-step mDNS diagnostic (avahi → dnsTunneling → resolve → ping)
+  HAL0 wsl2 check        Show WSL2 state (expected vs actual)
+  HAL0 host start [xpra] [barrier]
+                         Elect this machine as host. Start Xpra server + Barrier server.
+                         Advertises via avahi. Warns if another host already present.
+  HAL0 host stop [xpra] [barrier]
+                         Stop host servers + withdraw avahi advertisements
+  HAL0 host check        Show host state (expected vs actual)
   HAL0 sync              Pull --ff-only on all known repos (pull-first discipline)
   HAL0 provision [limit] Run Ansible playbook against this machine.
                          limit: wsl2 (default on WSL2) or tablets (default on Termux)
@@ -467,6 +496,8 @@ case "$cmd" in
   provision) _hal_selftest --quiet || exit 1; do_provision "$@" ;;
   notes)     _hal_selftest --quiet || exit 1; do_notes "${1:-}" ;;
   tablets)   _hal_selftest --quiet || exit 1; do_tablets "$@" ;;
+  wsl2)      _hal_selftest --quiet || exit 1; do_wsl2 "$@" ;;
+  host)      _hal_selftest --quiet || exit 1; do_host "$@" ;;
   help|-h|--help) usage ;;
   *)
     echo "[HAL] Unknown command: $cmd" >&2

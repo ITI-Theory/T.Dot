@@ -1,0 +1,348 @@
+#!/usr/bin/env bash
+# HAL0-host — server role election module (Xpra + Barrier/InputLeap)
+# Called via HAL0 dispatch. Never invoke directly.
+#
+# Any machine can become the host. This module:
+#   - Starts Xpra server :10 + Barrier/InputLeap server
+#   - Advertises both via avahi-publish-service (_xpra._tcp, _barrier._tcp)
+#   - On stop: kills servers + withdraws avahi advertisements
+#   - On status: shows what is expected vs what is running
+#
+# Defines: do_host
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
+XPRA_PORT=10               # Xpra TCP port (display :10 = port 6010)
+BARRIER_PORT=24800         # Barrier/InputLeap port
+
+# Detect if running on WSL2 or Termux (affects which barrier binary to use)
+_is_wsl2() { [[ -f /proc/sys/fs/binfmt_misc/WSLInterop ]] || [[ -n "${WSL_DISTRO_NAME:-}" ]]; }
+_is_termux() { [[ -n "${TERMUX_VERSION:-}" ]] || [[ -d /data/data/com.termux ]]; }
+
+# ---------------------------------------------------------------------------
+# Internal: find this machine's hostname for avahi advertisement
+# ---------------------------------------------------------------------------
+
+_host_hostname() {
+  hostname -f 2>/dev/null | sed 's/\.local$//' || hostname
+}
+
+# ---------------------------------------------------------------------------
+# Internal: check if another host already exists on LAN
+# ---------------------------------------------------------------------------
+
+_find_existing_xpra_host() {
+  avahi-browse -t -r _xpra._tcp 2>/dev/null \
+    | awk '/hostname/ {h=$3} /^=/ && h { print h; h="" }' \
+    | grep -v "^$" | head -1
+}
+
+_find_existing_barrier_host() {
+  avahi-browse -t -r _barrier._tcp 2>/dev/null \
+    | awk '/hostname/ {h=$3} /^=/ && h { print h; h="" }' \
+    | grep -v "^$" | head -1
+}
+
+# ---------------------------------------------------------------------------
+# Internal: state check
+# ---------------------------------------------------------------------------
+
+_host_status_check() {
+  local me
+  me=$(_host_hostname)
+
+  echo "  This machine: $me"
+  echo ""
+
+  # --- Xpra server ---
+  printf "  xpra server:   "
+  if pgrep -f "xpra start" > /dev/null 2>&1 || xpra list 2>/dev/null | grep -q "^LIVE"; then
+    local sessions
+    sessions=$(xpra list 2>/dev/null | grep "^LIVE" | head -3)
+    echo "running  [expected: running as host]"
+    echo "    sessions: ${sessions:-none}"
+    echo "    clients attach: xpra attach ssh://$me.local:$XPRA_PORT"
+  else
+    echo "not running  [expected: running — run: HAL host start xpra]"
+  fi
+
+  # --- avahi xpra advertisement ---
+  printf "  avahi xpra:    "
+  local existing_xpra
+  existing_xpra=$(_find_existing_xpra_host)
+  if [[ -n "$existing_xpra" ]]; then
+    if [[ "$existing_xpra" == "$me"* ]]; then
+      echo "advertising ($me.local) ✓"
+    else
+      echo "advertising — but from $existing_xpra (not this machine)"
+    fi
+  else
+    echo "not advertising  [expected: advertising as host]"
+  fi
+
+  # --- Barrier/InputLeap server ---
+  printf "  barrier server: "
+  if _is_wsl2; then
+    if tasklist.exe 2>/dev/null | grep -qi 'input-leaps'; then
+      echo "running (input-leaps.exe)  [expected: running as host]"
+    else
+      echo "not running  [expected: running — run: HAL host start barrier]"
+    fi
+  else
+    # Termux proot Debian
+    local SVDIR=/data/data/com.termux/files/usr/var/service
+    local barriers_n
+    barriers_n=$(sv status "$SVDIR/barriers" 2>/dev/null | grep -c "^run" || echo 0)
+    if [[ "$barriers_n" -gt 0 ]]; then
+      echo "running (barriers runit svc)  [expected: running as host]"
+    else
+      echo "not running  [expected: running — run: HAL host start barrier]"
+    fi
+  fi
+
+  # --- avahi barrier advertisement ---
+  printf "  avahi barrier:  "
+  local existing_barrier
+  existing_barrier=$(_find_existing_barrier_host)
+  if [[ -n "$existing_barrier" ]]; then
+    if [[ "$existing_barrier" == "$me"* ]]; then
+      echo "advertising ($me.local) ✓"
+    else
+      echo "advertising — but from $existing_barrier (not this machine)"
+    fi
+  else
+    echo "not advertising  [expected: advertising as host]"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Internal: start Xpra server
+# ---------------------------------------------------------------------------
+
+_start_xpra_server() {
+  if pgrep -f "xpra start" > /dev/null 2>&1 || xpra list 2>/dev/null | grep -q "^LIVE"; then
+    echo "[ok] xpra server already running"
+    return 0
+  fi
+
+  if ! command -v xpra &>/dev/null; then
+    echo "[ABORT] xpra not found — run: HAL provision --tags deb_packages"
+    return 1
+  fi
+
+  local me
+  me=$(_host_hostname)
+  echo "[info] Starting xpra server on :$XPRA_PORT (${me}.local) ..."
+  nohup xpra start ":$XPRA_PORT" \
+    --daemon=no \
+    --bind-tcp="0.0.0.0:$((6000 + XPRA_PORT))" \
+    --start="dbus-run-session -- xfce4-session" \
+    --start="awesome" \
+    --exit-with-children=no \
+    > /tmp/xpra-server.log 2>&1 &
+  disown
+  sleep 3
+
+  if xpra list 2>/dev/null | grep -q "^LIVE\|:$XPRA_PORT"; then
+    echo "[ok] xpra server started on :$XPRA_PORT"
+    echo "[info] Clients attach: xpra attach ssh://${me}.local:$XPRA_PORT"
+  else
+    echo "[WARN] xpra server may not have started — see /tmp/xpra-server.log"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Internal: advertise via avahi
+# ---------------------------------------------------------------------------
+
+_avahi_publish() {
+  local name="$1" type="$2" port="$3"
+  # Run in background — avahi-publish blocks until killed
+  nohup avahi-publish-service "$name" "$type" "$port" > /dev/null 2>&1 &
+  disown
+  echo "[ok] avahi: advertising $name ($type port $port)"
+}
+
+_avahi_unpublish() {
+  local type="$1"
+  pkill -f "avahi-publish-service.*$type" 2>/dev/null && \
+    echo "[ok] avahi: withdrew $type advertisement" || true
+}
+
+# ---------------------------------------------------------------------------
+# Internal: start Barrier server (WSL2 or Termux)
+# ---------------------------------------------------------------------------
+
+_start_barrier_server() {
+  local me
+  me=$(_host_hostname)
+
+  if _is_wsl2; then
+    local il_exe="/c/Program Files/InputLeap/input-leaps.exe"
+    local cfg="C:/Users/alist/AppData/Local/Barrier/barrier.sgc"
+
+    if tasklist.exe 2>/dev/null | grep -qi 'input-leaps'; then
+      echo "[ok] input-leaps.exe already running"
+      return 0
+    fi
+    if [[ ! -f "$il_exe" ]]; then
+      echo "[ABORT] Input Leap not found at: $il_exe"
+      echo "        Download: https://github.com/input-leap/input-leap/releases"
+      return 1
+    fi
+    powershell.exe -NoProfile -Command \
+      "Start-Process '${il_exe//\//\\\\}' -ArgumentList '-f','--no-tray','--disable-crypto','--name','${me}','-c','${cfg}','--address',':${BARRIER_PORT}' -WindowStyle Hidden" \
+      2>/dev/null
+    sleep 2
+    if tasklist.exe 2>/dev/null | grep -qi 'input-leaps'; then
+      echo "[ok] input-leaps.exe started — port $BARRIER_PORT"
+    else
+      echo "[WARN] input-leaps.exe did not start"
+      return 1
+    fi
+
+  else
+    # Termux: start barriers runit service in proot Debian
+    local SVDIR=/data/data/com.termux/files/usr/var/service
+    sv cont "$SVDIR/barriers" 2>/dev/null
+    sv up "$SVDIR/barriers" 2>/dev/null \
+      && echo "[ok] barriers runit svc started" \
+      || { echo "[WARN] barriers svc not found — run: HAL provision tablets --tags boot"; return 1; }
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Internal: stop Barrier server
+# ---------------------------------------------------------------------------
+
+_stop_barrier_server() {
+  if _is_wsl2; then
+    tasklist.exe 2>/dev/null | grep -qi 'input-leaps' \
+      && { taskkill.exe /F /IM input-leaps.exe > /dev/null 2>&1; echo "[ok] input-leaps.exe stopped"; } \
+      || echo "[info] input-leaps.exe was not running"
+  else
+    local SVDIR=/data/data/com.termux/files/usr/var/service
+    sv down "$SVDIR/barriers" 2>/dev/null \
+      && echo "[ok] barriers runit svc stopped" || true
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# do_host — public dispatcher
+# ---------------------------------------------------------------------------
+
+do_host() {
+  local sub="${1:-help}"
+  shift || true
+
+  # Always show state first (except help)
+  if [[ "$sub" != "help" ]]; then
+    echo "=== Host state ==="
+    _host_status_check
+    echo ""
+  fi
+
+  case "$sub" in
+
+    check|status)
+      # State already printed
+      ;;
+
+    start)
+      # Optional args: xpra, barrier (default: both)
+      local do_xpra=1 do_barrier=1
+      if [[ $# -gt 0 ]]; then
+        do_xpra=0 do_barrier=0
+        for arg in "$@"; do
+          case "$arg" in
+            xpra)    do_xpra=1 ;;
+            barrier) do_barrier=1 ;;
+            *) echo "[HAL] Unknown server: $arg (use: xpra, barrier)"; return 1 ;;
+          esac
+        done
+      fi
+
+      # Abort if another host already exists
+      local existing_xpra existing_barrier
+      existing_xpra=$(_find_existing_xpra_host)
+      existing_barrier=$(_find_existing_barrier_host)
+      local me; me=$(_host_hostname)
+
+      if [[ -n "$existing_xpra" && "$existing_xpra" != "$me"* ]]; then
+        echo "[WARN] Xpra host already advertising: $existing_xpra"
+        echo "       Run: HAL host stop on $existing_xpra first, or proceed anyway? (Ctrl-C to abort)"
+        read -r -t 10 _confirm || true
+      fi
+
+      echo "=== Starting host services ==="
+      if (( do_xpra )); then
+        _start_xpra_server || true
+        _avahi_publish "${me}-xpra" "_xpra._tcp" "$((6000 + XPRA_PORT))"
+      fi
+      if (( do_barrier )); then
+        _start_barrier_server || true
+        _avahi_publish "${me}-barrier" "_barrier._tcp" "$BARRIER_PORT"
+      fi
+
+      echo ""
+      echo "=== Post-check ==="
+      _host_status_check
+      ;;
+
+    stop)
+      local do_xpra=1 do_barrier=1
+      if [[ $# -gt 0 ]]; then
+        do_xpra=0 do_barrier=0
+        for arg in "$@"; do
+          case "$arg" in
+            xpra)    do_xpra=1 ;;
+            barrier) do_barrier=1 ;;
+          esac
+        done
+      fi
+
+      echo "=== Stopping host services ==="
+      if (( do_xpra )); then
+        _avahi_unpublish "_xpra._tcp"
+        xpra stop ":$XPRA_PORT" 2>/dev/null && echo "[ok] xpra server stopped" || true
+      fi
+      if (( do_barrier )); then
+        _avahi_unpublish "_barrier._tcp"
+        _stop_barrier_server
+      fi
+
+      echo ""
+      echo "=== Post-check ==="
+      _host_status_check
+      ;;
+
+    help|*)
+      cat <<'HUSAGE'
+HAL host <subcommand> [xpra] [barrier]
+
+  This machine becomes the hub (Xpra + Barrier server) for the session.
+  Any machine can be host — no hardcoded assignments.
+
+  start [xpra] [barrier]   Start selected servers (default: both).
+                            Warns if another host already advertising on LAN.
+                            Advertises via avahi: _xpra._tcp + _barrier._tcp.
+  stop  [xpra] [barrier]   Stop servers + withdraw avahi advertisements.
+  check                     Show expected vs actual state (alias: status).
+  help                      This help.
+
+  State shows:
+    - which servers are running
+    - what clients should expect (attach commands)
+    - whether avahi is advertising correctly
+    - any mismatch between expected and actual
+
+  Client machines discover this host automatically via:
+    HAL wsl2 startx        (laptop)
+    HAL tablets start [N]  (tablets)
+HUSAGE
+      ;;
+  esac
+}

@@ -133,12 +133,23 @@ _do_start_one() {
   echo "--- $name ($host) ---"
 
   SVDIR=/data/data/com.termux/files/usr/var/service
-  # Determine service set locally, pass as expanded string into heredoc
+
+  # Discover whether a barrier host is already advertising on LAN.
+  # If no host yet and this is the first tablet up, it becomes the server.
+  # If a host is already present, this tablet joins as a client.
+  # Detection runs locally on the tablet (avahi inside proot Debian).
+  local barrier_host_found
+  barrier_host_found=$(ssh $SSH_OPTS "$host" \
+    'proot-distro login debian -- avahi-browse -t -r _barrier._tcp 2>/dev/null | grep -c hostname || echo 0' \
+    2>/dev/null || echo 0)
+
   local svcs
-  if [[ "$name" == "Tablet2" ]]; then
-    svcs="tx11 tx11-xfce4 barriers"
-  else
+  if [[ "$barrier_host_found" -gt 0 ]]; then
     svcs="tx11 tx11-xfce4 barrierc"
+    echo "[info] barrier host found on LAN — starting as client"
+  else
+    svcs="tx11 tx11-xfce4 barriers"
+    echo "[info] no barrier host found — starting as server"
   fi
 
   ssh $SSH_OPTS "$host" bash <<ENDSSH
@@ -157,8 +168,6 @@ fi
 pkill -9 -x proot 2>/dev/null; true
 
 # Bring up required services ($svcs)
-# sv cont clears runit's internal "don't restart" flag set by sv down;
-# sv up alone is insufficient after sv down has been used.
 for svc in $svcs; do
   sv cont $SVDIR/\$svc 2>/dev/null; sv up $SVDIR/\$svc 2>/dev/null && echo "[ok] sv up \$svc" || echo "[warn] \$svc not found — run: HAL provision tablets --tags boot"
 done
@@ -168,46 +177,6 @@ for svc in $svcs; do sv status $SVDIR/\$svc 2>/dev/null || true; done
 ENDSSH
 
   echo "[done] $name — tap Termux:X11 icon on tablet if desktop not visible"
-}
-
-# ---------------------------------------------------------------------------
-# Internal: start (or restart) the Barrier server in WSL2 tmux
-# ---------------------------------------------------------------------------
-
-_do_start_barrier_server() {
-  # Launches Input Leap server (input-leaps.exe) in foreground.
-  # NOTE: Barrier service (barrierd) is DISABLED — do not re-enable.
-  # Config: C:/Users/alist/AppData/Local/Barrier/barrier.sgc
-  #   clipboardSharing = false  (crashes on screen-switch in Barrier 2.x)
-  #   screenSaverSync = false
-  #   win32KeepForeground = false
-  #   switchDelay = 500
-  local il_exe="/c/Program Files/InputLeap/input-leaps.exe"
-  local cfg="C:/Users/alist/AppData/Local/Barrier/barrier.sgc"
-
-  if tasklist.exe 2>/dev/null | grep -qi 'input-leaps'; then
-    echo "[ok] input-leaps.exe already running"
-    return 0
-  fi
-
-  if [[ ! -f "$il_exe" ]]; then
-    echo "[ABORT] Input Leap not found at: $il_exe"
-    echo "        Download: https://github.com/input-leap/input-leap/releases"
-    return 1
-  fi
-
-  echo "[info] Starting Input Leap server..."
-  # Run detached via powershell Start-Process so it survives terminal close
-  powershell.exe -NoProfile -Command \
-    "Start-Process '${il_exe//\//\\\\}' -ArgumentList '-f','--no-tray','--disable-crypto','--name','Laptop-P14s','-c','${cfg}','--address',':24800' -WindowStyle Hidden" \
-    2>/dev/null
-  sleep 2
-
-  if tasklist.exe 2>/dev/null | grep -qi 'input-leaps'; then
-    echo "[ok] input-leaps.exe started — port 24800"
-  else
-    echo "[WARN] input-leaps.exe did not start — check manually"
-  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -253,9 +222,10 @@ do_tablets() {
       ;;
 
     barrier-server)
-      # {P: running in WSL2} start barriers.exe in WSL2 tmux session {Q: port 24800 listening}
-      echo "=== Starting Barrier server (WSL2-owned) ==="
-      _do_start_barrier_server
+      # Moved to HAL0-host. Kept here as a shim for backwards compat.
+      echo "[HAL] 'HAL tablets barrier-server' is deprecated."
+      echo "      Use: HAL host start barrier"
+      do_host start barrier
       ;;
 
     start)
