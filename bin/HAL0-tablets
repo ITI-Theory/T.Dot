@@ -193,8 +193,11 @@ _do_start_one() {
   # Detection runs locally on the tablet (avahi inside proot Debian).
   local barrier_host_found
   barrier_host_found=$(ssh $SSH_OPTS "$addr" \
-    'proot-distro login debian -- avahi-browse -t -r _barrier._tcp 2>/dev/null | grep -c hostname || echo 0' \
-    2>/dev/null || echo 0)
+    'proot-distro login debian -- timeout 3 avahi-browse -t -r _barrier._tcp 2>/dev/null | grep -c hostname; true' \
+    2>/dev/null) || true
+  # sanitize: grep -c can emit "0\n0" if both grep and ssh produce output — take last digit-only line
+  barrier_host_found=$(echo "${barrier_host_found:-0}" | grep -o '^[0-9]*' | tail -1)
+  barrier_host_found="${barrier_host_found:-0}"
 
   local svcs
   if [[ "$barrier_host_found" -gt 0 ]]; then
