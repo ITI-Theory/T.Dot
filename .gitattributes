@@ -1,6 +1,7 @@
 * text=auto
 bin/HAL text eol=lf
 bin/HAL0 text eol=lf
+bin/HAL0-lib text eol=lf
 bin/HAL0-tablets text eol=lf
 bin/HAL.bat.OBSOLETE text eol=crlf
 bin/HAL.cmd text eol=crlf

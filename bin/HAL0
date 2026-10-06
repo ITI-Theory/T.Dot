@@ -8,62 +8,11 @@ ITI="$(cd -- "$REPO_ROOT/.." && pwd)"
 ME_REPO="$(cd -- "$ITI/../Me" 2>/dev/null && pwd)" || ME_REPO="$HOME/prj/git/Me"
 
 # ---------------------------------------------------------------------------
-# Platform and capabilities (T.Dot/DESIGN.md)
-# HAL_OS describes the shell world: gitbash | termux | wsl | unix
-# ("unix" = any real Linux: bare-metal mini PC, VirtualBox VM, cloud VM).
-# Whether a command can run is decided by the tools it needs, not by the name
-# of the platform: see _hal_requires.
+# Platform, dry run and capability checks: shared with every layer (HAL0-lib)
 # ---------------------------------------------------------------------------
 
-case "$(uname -s)" in
-  MINGW*|MSYS*|CYGWIN*) HAL_OS=gitbash ;;
-  *)
-    if [[ -n "${TERMUX_VERSION:-}" || -d /data/data/com.termux ]]; then HAL_OS=termux
-    elif [[ -n "${WSL_DISTRO_NAME:-}" || -f /proc/sys/fs/binfmt_misc/WSLInterop ]]; then HAL_OS=wsl
-    else HAL_OS=unix
-    fi
-    ;;
-esac
-export HAL_OS
-
-# _hal_do <command...>: run a command that changes state, or in a dry run
-# (HAL -n ...) print it instead. Every state-changing command goes through this.
-_hal_do() {
-  if (( ${HAL_DRY_RUN:-0} )); then
-    printf '[would]'; printf ' %q' "$@"; printf '\n'
-  else
-    "$@"
-  fi
-}
-
-# _hal_write <file> <text>: write a file, or in a dry run show what would be written
-_hal_write() {
-  local dst="$1" text="$2"
-  if (( ${HAL_DRY_RUN:-0} )); then
-    echo "[would] write $dst:"
-    printf '%s' "$text" | sed 's/^/          | /'
-    if [[ -e "$dst" ]]; then echo "          (replaces the existing file)"; fi
-  else
-    printf '%s' "$text" > "$dst"
-  fi
-}
-
-# _hal_has <tool...>: true if every tool is installed
-_hal_has() {
-  local t
-  for t in "$@"; do command -v "$t" &>/dev/null || return 1; done
-}
-
-# _hal_requires <command> <tool...>: stop politely if a tool is missing
-_hal_requires() {
-  local cmd="$1"; shift
-  local t missing=()
-  for t in "$@"; do command -v "$t" &>/dev/null || missing+=("$t"); done
-  if (( ${#missing[@]} )); then
-    echo "[HAL $HAL_OS] '$cmd' needs: ${missing[*]} (not installed here)" >&2
-    exit 2
-  fi
-}
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/HAL0-lib"
 
 # ---------------------------------------------------------------------------
 # Utilities
@@ -543,13 +492,7 @@ USAGE
 }
 
 # Global flags, before the command: -n / --dry-run (or HAL_DRY_RUN=1)
-while [[ "${1:-}" == -* && "${1:-}" != "-h" && "${1:-}" != "--help" ]]; do
-  case "$1" in
-    -n|--dry-run) HAL_DRY_RUN=1; shift ;;
-    *) echo "[HAL] Unknown flag: $1" >&2; exit 1 ;;
-  esac
-done
-export HAL_DRY_RUN="${HAL_DRY_RUN:-0}"
+_hal_flags "$@"; set -- "${HAL_ARGS[@]+"${HAL_ARGS[@]}"}"
 (( HAL_DRY_RUN )) && echo "[HAL $HAL_OS] DRY RUN: nothing will be changed; '[would]' lines show what would happen" >&2
 
 cmd="${1:-help}"
