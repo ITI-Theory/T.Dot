@@ -339,9 +339,9 @@ _notes_dotfiles() {
                                           provisioning/tablets/
 
   Me/Dot (Alistair-Johnson/Me/Dot)
-                              — STAGING ONLY. i3/config + picom.conf created
-                                May 13 2026 but identical to U.Dot defaults.
-                                Do NOT use for provisioning. Can be deleted.
+                              — REMOVED 2026-10-06 (was a staging copy of
+                                U.Dot's i3/config and picom.conf; in git
+                                history only). Do NOT recreate.
 
 ## Provisioning path
   P14s WSL2:  clone T.Dot → HAL init → HAL sync → U.Dot clone → symlinks
