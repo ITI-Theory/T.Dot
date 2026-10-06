@@ -67,6 +67,47 @@ sources; `HAL prime lean` loads all proof files. Multiple packs combine.
 This is the same architecture webpack uses for JS bundles: a base entry point
 plus named modules, assembled on demand into a single output stream.
 
+`HAL copilot start` (below) is prime grown up: an AI runs it *itself* (no
+clipboard), and it reads the current front door (the lane's README.md), the
+"you are here" page (U/docs/agent/CURRENT.md) and the tail of the active chat
+file, not the older research log. `HAL prime` stays as an alias.
+
+## The vocabulary: noun, then verb
+
+As HAL grows, a flat list of verbs collides: `start` means one thing for a
+tablet and another for an AI session. Commands are therefore **noun, then
+verb**, never deeper than two levels (the git / kubectl / az pattern):
+
+```
+HAL tablets start
+HAL copilot start          # begin an AI session (replaces bare `prime`)
+HAL copilot save           # interim save: chat export + "in progress" note
+HAL copilot wrapup         # end of session: save, rewrite CURRENT, commit
+HAL chat new <name>        # name a new chat and create its folder
+HAL mother ask "..."       # ask the public notebook (through the bridge)
+HAL hal ask "..."          # ask the private notebook (H-AL's memory)
+HAL uat scope              # release scope check in a fresh nlm-uat notebook
+```
+
+Rules:
+
+- **Few shared verbs.** `start`, `stop`, `save`, `status`, `check`, `ask`,
+  `new`, `help`. A new capability adds a noun, not new verbs.
+- **One list.** `HAL help` lists the nouns; `HAL <noun> help` lists that
+  noun's verbs. Both are generated from the scripts, so they cannot go stale.
+  Documentation points to `HAL help` instead of copying it.
+- **Context.** `HAL context <noun>` sets a default noun, so a bare `HAL start`
+  means `HAL <noun> start`. It is detected where possible (the VS Code
+  terminal sets `TERM_PROGRAM=vscode`), `HAL_CONTEXT` overrides it for one
+  terminal, and every output line starts with `[HAL <context>]` so the hidden
+  state is never hidden.
+- **AI uses the full form.** An AI's commands must mean the same thing in any
+  terminal, so AI never relies on context. People may use the short form.
+- **Layers.** Generic nouns (`copilot`, `chat`, `mother`, `hal`) live in
+  HAL0; lane-specific ones (U paths, notebook ids, `uat`) in the lane's layer
+  (HAL1 for U). The dispatcher already sends each command to the highest
+  layer, which forwards what it does not know.
+
 ## What HAL is bootstrapping
 
 This is the initialisation sequence of a new operating system.
