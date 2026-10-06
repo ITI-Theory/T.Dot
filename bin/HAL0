@@ -113,50 +113,138 @@ do_init() {
 # HAL prime — base context block
 # ---------------------------------------------------------------------------
 
+# HAL prime is now an alias of `HAL copilot start` (T.Dot/DESIGN.md); packs
+# (papers, lean, ...) are still appended by the dispatcher.
 do_prime() {
-  banner "HAL prime — $(date '+%Y-%m-%d %H:%M')"
+  do_copilot_start
+}
 
-  section "MODE"
-  echo "AUTOPILOT — propose actions as a numbered checklist, then wait."
-  echo "User vocabulary: 'next'/'y' = next step; 'go all'/'A' = whole list;"
-  echo "'stop'/'n' = abort. Full policy in master instructions below."
+# ---------------------------------------------------------------------------
+# HAL copilot / chat — AI sessions (T.Dot/DESIGN.md, "The vocabulary")
+# ---------------------------------------------------------------------------
 
-  section "MASTER INSTRUCTIONS (T/.github/copilot-instructions.md)"
-  if [[ -f "$ITI/T/.github/copilot-instructions.md" ]]; then
-    cat "$ITI/T/.github/copilot-instructions.md"
-  else
-    echo "[HAL] WARNING: T master instructions not found"
+# The repo the command was started in (default U)
+_hal_repo_root() { git rev-parse --show-toplevel 2>/dev/null || echo "$ITI/U"; }
+
+# _hal_readme_section <file> <title>: print "## <title>" up to the next "## "
+_hal_readme_section() {
+  local file="$1" title="$2"
+  [[ -f "$file" ]] || return 0
+  awk -v t="## $title" 'index($0, t) == 1 { p = 1; print; next } p && /^## / { exit } p' "$file"
+}
+
+# The Inbox file of the current Copilot session (newest events.jsonl), else
+# the most recently updated Copilot chat in Me/chats/Inbox
+_hal_latest_chat() {
+  local f latest="" sess="" d
+  for d in "$HOME/.copilot/session-state"/*/; do
+    [[ -f "$d/events.jsonl" ]] || continue
+    if [[ -z "$sess" || "$d/events.jsonl" -nt "$sess/events.jsonl" ]]; then sess="${d%/}"; fi
+  done
+  if [[ -n "$sess" ]]; then
+    for f in "$ME_REPO/chats/Inbox"/*.md; do
+      [[ -f "$f" ]] || continue
+      # sed reads to the end, so pipefail cannot see a broken pipe (head | grep -q can)
+      if sed -n '1,8p' "$f" | grep -q "^session: $(basename "$sess")\$"; then echo "$f"; return 0; fi
+    done
   fi
+  for f in "$ME_REPO/chats/Inbox"/*.md; do
+    [[ -f "$f" ]] || continue
+    sed -n '1,3p' "$f" | grep -q '^type: ai_chat_copilot' || continue
+    if [[ -z "$latest" || "$f" -nt "$latest" ]]; then latest="$f"; fi
+  done
+  echo "$latest"
+}
 
-  section "U INSTRUCTIONS (U/.github/copilot-instructions.md)"
-  if [[ -f "$ITI/U/.github/copilot-instructions.md" ]]; then
-    cat "$ITI/U/.github/copilot-instructions.md"
-  else
-    echo "[HAL] WARNING: U instructions not found"
+do_copilot_start() {
+  local repo name chat r
+  repo="$(_hal_repo_root)"; name="$(basename "$repo")"
+  banner "HAL copilot start — $(date '+%Y-%m-%d %H:%M') — platform: $HAL_OS — repo: $name"
+
+  section "FRONT DOOR (T/README.md, Working in these repos)"
+  _hal_readme_section "$ITI/T/README.md" "Working in these repos"
+  if [[ "$name" != "T" ]]; then
+    section "REPO FRONT DOOR ($name/README.md, Working on this repo)"
+    _hal_readme_section "$repo/README.md" "Working on this repo"
   fi
-
-  section "FIELD-NOTES (last 40 lines)"
-  if [[ -f "$ITI/U/paper/FIELD-NOTES.md" ]]; then
-    tail -40 "$ITI/U/paper/FIELD-NOTES.md"
-  else
-    echo "[HAL] WARNING: FIELD-NOTES.md not found"
+  if [[ -f "$repo/docs/agent/CURRENT.md" ]]; then
+    section "WHERE WE ARE ($name/docs/agent/CURRENT.md, first 40 lines)"
+    head -n 40 "$repo/docs/agent/CURRENT.md"
   fi
-
+  chat="$(_hal_latest_chat)"
+  if [[ -n "$chat" ]]; then
+    section "ACTIVE CHAT (last 60 lines of Me/chats/Inbox/$(basename "$chat"))"
+    tail -n 60 "$chat"
+  fi
   section "GIT STATUS"
-  for repo in U T.Ops Me; do
-    local rpath
-    if [[ "$repo" == "Me" ]]; then
-      rpath="$ME_REPO"
-    else
-      rpath="$ITI/$repo"
-    fi
-    echo "=== $repo ==="
-    if [[ -d "$rpath/.git" ]]; then
-      git -C "$rpath" status -sb
-    else
-      echo "[not found at $rpath]"
+  for r in T T.Dot T.Ops U U.Dot; do
+    if [[ -d "$ITI/$r/.git" ]]; then echo "=== $r ==="; git -C "$ITI/$r" status -sb | sed -n '1,12p'; fi
+  done
+  if [[ -d "$ME_REPO/.git" ]]; then echo "=== Me ==="; git -C "$ME_REPO" status -sb | sed -n '1,12p'; fi
+  echo ""
+  echo "Commands: HAL help. Save often: HAL copilot save. End: HAL copilot wrapup."
+}
+
+# HAL copilot save [name]: export this chat to Me/chats/Inbox (make copilot).
+# The name is needed only the first time; later saves update the same file.
+do_copilot_save() {
+  local args=()
+  _hal_requires "copilot save" make python
+  [[ -n "${1:-}" ]] && args+=("T=$1")
+  (( ${HAL_DRY_RUN:-0} )) && args+=(DRY=1)
+  make -s -C "$ME_REPO/chats" copilot "${args[@]+"${args[@]}"}"
+}
+
+do_copilot_wrapup() {
+  local r n
+  do_copilot_save "$@"
+  section "WRAP UP — before ending the session"
+  echo "1. Rewrite the current-state page (U: docs/agent/CURRENT.md): where we are, what is next."
+  echo "2. Record ideas not done on the spot as issues (ISSUES.md)."
+  echo "3. Commit and push every repo with changes (including the chat file in Me):"
+  for r in T T.Dot T.Ops U U.Dot; do
+    if [[ -d "$ITI/$r/.git" ]]; then
+      n="$(git -C "$ITI/$r" status --porcelain | wc -l | tr -d ' ')"
+      [[ "$n" == 0 ]] || echo "   $r: $n changed or new files"
     fi
   done
+  if [[ -d "$ME_REPO/.git" ]]; then
+    n="$(git -C "$ME_REPO" status --porcelain | wc -l | tr -d ' ')"
+    [[ "$n" == 0 ]] || echo "   Me: $n changed or new files"
+  fi
+}
+
+do_copilot() {
+  local sub="${1:-help}"; shift || true
+  case "$sub" in
+    start)  do_copilot_start ;;
+    save)   do_copilot_save "$@" ;;
+    wrapup) do_copilot_wrapup "$@" ;;
+    *) cat <<'COPILOT'
+HAL copilot — AI sessions
+  HAL copilot start           front doors, current state, end of the active chat, git status
+  HAL copilot save [name]     export this chat to Me/chats/Inbox (name needed the first time)
+  HAL copilot wrapup [name]   save, then the end-of-session checklist
+COPILOT
+    ;;
+  esac
+}
+
+do_chat() {
+  local sub="${1:-help}"; shift || true
+  case "$sub" in
+    new)
+      [[ -n "${1:-}" ]] || { echo "usage: HAL chat new <name>" >&2; exit 1; }
+      do_copilot_save "$1" ;;
+    list)
+      ls -t "$ME_REPO/chats/Inbox" 2>/dev/null | sed -n "1,${1:-10}p" ;;
+    *) cat <<'CHAT'
+HAL chat — chat files in Me/chats/Inbox (process: Me/chats/Makefile, make help)
+  HAL chat new <name>         name this chat and save it to Inbox for the first time
+  HAL chat list [n]           the n most recent Inbox files (default 10)
+CHAT
+    ;;
+  esac
 }
 
 # ---------------------------------------------------------------------------
@@ -441,6 +529,8 @@ usage() {
 Usage:
   HAL0 [-n|--dry-run] <command> ...
                          -n: show what would change ('[would]' lines), change nothing
+  HAL0 copilot start|save|wrapup  AI sessions: start = front doors + current state + active chat
+  HAL0 chat new <name> | list     chat files in Me/chats/Inbox
   HAL0 prime [pack ...] [-c|--clip]
                          Output AI context block to stdout.
                          Add -c or --clip to also copy to clipboard
@@ -544,6 +634,8 @@ case "$cmd" in
       _run_prime
     fi
     ;;
+  copilot)   do_copilot "$@" ;;
+  chat)      do_chat "$@" ;;
   init)      do_init ;;
   selftest)  _hal_selftest ;;
   sync)      _hal_selftest --quiet || exit 1; do_sync ;;
