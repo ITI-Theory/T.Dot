@@ -108,6 +108,27 @@ Rules:
   (HAL1 for U). The dispatcher already sends each command to the highest
   layer, which forwards what it does not know.
 
+## Dry run: look before you leap
+
+`HAL -n <noun> <verb>` (or `HAL_DRY_RUN=1`) runs a command without changing
+anything: reads and checks happen for real, and every change is printed as a
+`[would]` line instead (`[would] rm -f ...`, `[would] write <file>:` with the
+contents). Every state-changing command in HAL goes through `_hal_do` or
+`_hal_write`, so the dry run cannot miss one. Make targets have the same thing
+for free: `make -n <target>`.
+
+Rule for people and AI: run anything that changes state with `-n` first, read
+the `[would]` lines, then run it for real.
+
+## Platforms and capabilities
+
+`HAL_OS` names the shell world: `gitbash` (Windows), `termux` (the tablets),
+`wsl`, or `unix` (any real Linux: a bare-metal mini PC, a VirtualBox VM).
+Whether a command can run is decided by the tools it needs
+(`_hal_requires host xpra avahi-browse`), not by the platform's name, so a new
+machine works as soon as it has the tools. A command whose tools are missing
+says which ones and stops before changing anything.
+
 ## What HAL is bootstrapping
 
 This is the initialisation sequence of a new operating system.
