@@ -8,6 +8,42 @@ ITI="$(cd -- "$REPO_ROOT/.." && pwd)"
 ME_REPO="$(cd -- "$ITI/../Me" 2>/dev/null && pwd)" || ME_REPO="$HOME/prj/git/Me"
 
 # ---------------------------------------------------------------------------
+# Platform and capabilities (T.Dot/DESIGN.md)
+# HAL_OS describes the shell world: gitbash | termux | wsl | unix
+# ("unix" = any real Linux: bare-metal mini PC, VirtualBox VM, cloud VM).
+# Whether a command can run is decided by the tools it needs, not by the name
+# of the platform: see _hal_requires.
+# ---------------------------------------------------------------------------
+
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) HAL_OS=gitbash ;;
+  *)
+    if [[ -n "${TERMUX_VERSION:-}" || -d /data/data/com.termux ]]; then HAL_OS=termux
+    elif [[ -n "${WSL_DISTRO_NAME:-}" || -f /proc/sys/fs/binfmt_misc/WSLInterop ]]; then HAL_OS=wsl
+    else HAL_OS=unix
+    fi
+    ;;
+esac
+export HAL_OS
+
+# _hal_has <tool...>: true if every tool is installed
+_hal_has() {
+  local t
+  for t in "$@"; do command -v "$t" &>/dev/null || return 1; done
+}
+
+# _hal_requires <command> <tool...>: stop politely if a tool is missing
+_hal_requires() {
+  local cmd="$1"; shift
+  local t missing=()
+  for t in "$@"; do command -v "$t" &>/dev/null || missing+=("$t"); done
+  if (( ${#missing[@]} )); then
+    echo "[HAL $HAL_OS] '$cmd' needs: ${missing[*]} (not installed here)" >&2
+    exit 2
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
 
@@ -309,16 +345,16 @@ STACK
 # ---------------------------------------------------------------------------
 
 do_status() {
-  banner "HAL status — $(date '+%Y-%m-%d %H:%M')"
+  banner "HAL status — $(date '+%Y-%m-%d %H:%M') — platform: $HAL_OS"
 
   section "HOST"
-  _host_status_check
+  if _hal_has xpra avahi-browse; then _host_status_check; else echo "[skip] needs xpra and avahi-browse"; fi
 
   section "WSL2"
-  _wsl2_status_check
+  if [[ "$HAL_OS" == wsl ]]; then _wsl2_status_check; else echo "[skip] not a WSL2 machine"; fi
 
   section "TABLETS"
-  _tablet_check
+  if _hal_has ssh avahi-resolve; then _tablet_check; else echo "[skip] needs ssh and avahi-resolve"; fi
 }
 
 # ---------------------------------------------------------------------------
@@ -406,8 +442,9 @@ do_provision() {
 # ---------------------------------------------------------------------------
 
 usage() {
+  echo "HAL0 — T-lane base layer   (platform: $HAL_OS)"
+  echo "Commands that need tools missing here say so when run; 'HAL0 status' shows what is available."
   cat <<'USAGE'
-HAL0 — T-lane base layer
 
 Usage:
   HAL0 prime [pack ...] [-c|--clip]
@@ -512,12 +549,14 @@ case "$cmd" in
   init)      do_init ;;
   selftest)  _hal_selftest ;;
   sync)      _hal_selftest --quiet || exit 1; do_sync ;;
-  provision) _hal_selftest --quiet || exit 1; do_provision "$@" ;;
+  provision) _hal_selftest --quiet || exit 1; _hal_requires provision ansible-playbook; do_provision "$@" ;;
   notes)     _hal_selftest --quiet || exit 1; do_notes "${1:-}" ;;
-  tablets)   _hal_selftest --quiet || exit 1; do_tablets "$@" ;;
-  wsl2)      _hal_selftest --quiet || exit 1; do_wsl2 "$@" ;;
+  tablets)   _hal_selftest --quiet || exit 1; _hal_requires tablets ssh avahi-resolve; do_tablets "$@" ;;
+  wsl2)      _hal_selftest --quiet || exit 1
+             [[ "$HAL_OS" == wsl ]] || { echo "[HAL $HAL_OS] 'wsl2' runs only inside WSL2" >&2; exit 2; }
+             do_wsl2 "$@" ;;
   status)    _hal_selftest --quiet || exit 1; do_status ;;
-  host)      _hal_selftest --quiet || exit 1; do_host "$@" ;;
+  host)      _hal_selftest --quiet || exit 1; _hal_requires host xpra avahi-browse avahi-publish; do_host "$@" ;;
   help|-h|--help) usage ;;
   *)
     echo "[HAL] Unknown command: $cmd" >&2
