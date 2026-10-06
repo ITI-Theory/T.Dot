@@ -134,6 +134,22 @@ do_init() {
 "
     _hal_do chmod +x "$dst" || true  # chmod fails on Windows DrvFS
   done
+  if [[ "$HAL_OS" == gitbash ]]; then
+    # Windows: put T.Dot\bin on the *user* PATH so HAL.cmd works from cmd and
+    # PowerShell. Reads and writes only the user PATH (never `setx`, which
+    # truncates at 1024 characters and merges the system PATH into it).
+    local winbin
+    winbin="$(cygpath -w "$SCRIPT_DIR")"
+    # </dev/null: powershell.exe otherwise reads stdin and can swallow output
+    if powershell.exe -NoProfile -Command "\$p=[Environment]::GetEnvironmentVariable('Path','User'); if ((\$p -split ';') -contains '$winbin') { exit 0 } else { exit 1 }" </dev/null; then
+      echo "[HAL0] $winbin already on the Windows user PATH"
+    elif (( ${HAL_DRY_RUN:-0} )); then
+      echo "[would] add $winbin to the Windows user PATH (user PATH only; never setx)"
+    else
+      powershell.exe -NoProfile -Command "\$p=[Environment]::GetEnvironmentVariable('Path','User'); [Environment]::SetEnvironmentVariable('Path', ((\$p.TrimEnd(';') + ';$winbin').TrimStart(';')), 'User')" </dev/null
+      echo "[HAL0] added $winbin to the Windows user PATH (new terminals only)"
+    fi
+  fi
   if (( ${HAL_DRY_RUN:-0} )); then
     echo "[HAL0] dry run complete — nothing was changed"
     return 0

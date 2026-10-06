@@ -120,6 +120,15 @@ for free: `make -n <target>`.
 Rule for people and AI: run anything that changes state with `-n` first, read
 the `[would]` lines, then run it for real.
 
+## Windows: one implementation, a thin launcher
+
+On Windows, HAL runs in Git Bash: the same bash scripts as on Linux and the
+tablets. `bin/HAL.cmd` is a three-line launcher that runs them through Git Bash,
+so `HAL` also works from cmd and PowerShell; `HAL init` puts `T.Dot\bin` on
+the Windows *user* PATH (never with `setx`, which truncates). The earlier
+cmd-language version is kept as `bin/HAL.bat.OBSOLETE`: a second
+implementation drifts, and it had.
+
 ## Platforms and capabilities
 
 `HAL_OS` names the shell world: `gitbash` (Windows), `termux` (the tablets),
