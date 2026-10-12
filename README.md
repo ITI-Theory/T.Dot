@@ -42,3 +42,7 @@ HAL help               List all commands.
 ## Architecture
 
 See [DESIGN.md](DESIGN.md).
+
+## Licence
+
+Copyright 2026 Alistair Johnson. [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), full text in [LICENSE](LICENSE).
